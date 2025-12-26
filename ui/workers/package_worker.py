@@ -38,31 +38,43 @@ class PackageListWorker(QThread):
     def run(self):
         """Execute package listing in background thread."""
         try:
+            print(f"[Worker] Starting package list for {self.manager.value}")
             self.signals.started.emit()
 
             # Progress callback that emits signals
             def progress_callback(current: int, total: int, message: str):
                 if not self._is_cancelled:
+                    print(f"[Worker] Progress: {current}/{total} - {message}")
                     self.signals.progress.emit(current, total, message)
 
             # Call service layer (blocking operation)
+            print(f"[Worker] Calling service.get_installed_packages({self.manager.value})")
             packages = self.service.get_installed_packages(
                 self.manager,
                 progress_callback
             )
 
+            print(f"[Worker] Received {len(packages)} packages from service")
+
             # Emit result if not cancelled
             if not self._is_cancelled:
+                print(f"[Worker] Emitting packages_loaded signal with {len(packages)} packages")
                 self.signals.packages_loaded.emit(packages)
+            else:
+                print("[Worker] Operation was cancelled, not emitting packages")
 
         except Exception as e:
             # Emit error if not cancelled
+            print(f"[Worker] ERROR: {type(e).__name__}: {str(e)}")
             if not self._is_cancelled:
                 error_msg = f"Failed to list packages: {str(e)}"
                 self.signals.error_occurred.emit(error_msg)
+            import traceback
+            traceback.print_exc()
 
         finally:
             # Always emit finished signal
+            print("[Worker] Emitting finished signal")
             self.signals.finished.emit()
 
     def cancel(self):

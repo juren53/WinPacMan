@@ -1,5 +1,6 @@
 import subprocess
 import re
+import json
 import threading
 import time
 from typing import List, Optional, Callable, Dict, Any
@@ -76,7 +77,12 @@ class PackageManagerService:
             
         except subprocess.TimeoutExpired:
             raise TimeoutError("list", 60, "WinGet")
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        except FileNotFoundError:
+            raise PackageManagerNotAvailableError(
+                "WinGet",
+                "WinGet is built into Windows 11. For Windows 10, install from Microsoft Store"
+            )
+        except subprocess.CalledProcessError as e:
             raise OperationFailedError("list", "WinGet", str(e))
     
     def _parse_winget_line(self, line: str) -> Optional[Package]:
@@ -156,7 +162,12 @@ class PackageManagerService:
             
         except subprocess.TimeoutExpired:
             raise TimeoutError("list", 60, "Chocolatey")
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        except FileNotFoundError:
+            raise PackageManagerNotAvailableError(
+                "Chocolatey",
+                "Install from https://chocolatey.org/install"
+            )
+        except subprocess.CalledProcessError as e:
             raise OperationFailedError("list", "Chocolatey", str(e))
     
     def _get_pip_installed(self, progress_callback: Optional[Callable] = None) -> List[Package]:
@@ -174,8 +185,7 @@ class PackageManagerService:
             
             if progress_callback:
                 progress_callback(50, 100, "Parsing package list...")
-            
-            import json
+
             packages_data = json.loads(result.stdout)
             packages = []
             
@@ -195,7 +205,12 @@ class PackageManagerService:
             
         except subprocess.TimeoutExpired:
             raise TimeoutError("list", 60, "Pip")
-        except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError) as e:
+        except FileNotFoundError:
+            raise PackageManagerNotAvailableError(
+                "Pip",
+                "Pip should be included with Python. Try 'python -m ensurepip' to install it"
+            )
+        except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
             raise OperationFailedError("list", "Pip", str(e))
     
     def _get_npm_installed(self, progress_callback: Optional[Callable] = None) -> List[Package]:
@@ -213,8 +228,7 @@ class PackageManagerService:
             
             if progress_callback:
                 progress_callback(50, 100, "Parsing package list...")
-            
-            import json
+
             packages_data = json.loads(result.stdout)
             packages = []
             
@@ -235,7 +249,12 @@ class PackageManagerService:
             
         except subprocess.TimeoutExpired:
             raise TimeoutError("list", 60, "NPM")
-        except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError) as e:
+        except FileNotFoundError:
+            raise PackageManagerNotAvailableError(
+                "NPM",
+                "Please install Node.js from https://nodejs.org to use NPM"
+            )
+        except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
             raise OperationFailedError("list", "NPM", str(e))
     
     def install_package(self, manager: PackageManager, package_id: str, 

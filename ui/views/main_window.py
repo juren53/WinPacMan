@@ -149,7 +149,9 @@ class WinPacManMainWindow(QMainWindow):
 
     def refresh_packages(self):
         """Refresh package list using QThread worker."""
+        print("[MainWindow] refresh_packages called")
         if self.operation_in_progress:
+            print("[MainWindow] Operation already in progress, showing warning")
             QMessageBox.warning(
                 self,
                 "Operation In Progress",
@@ -158,14 +160,17 @@ class WinPacManMainWindow(QMainWindow):
             return
 
         manager = self.get_selected_manager()
+        print(f"[MainWindow] Selected manager: {manager.value}")
 
         # Create and configure worker
+        print("[MainWindow] Creating PackageListWorker")
         self.current_worker = PackageListWorker(
             self.package_service,
             manager
         )
 
         # Connect signals
+        print("[MainWindow] Connecting worker signals")
         self.current_worker.signals.started.connect(
             lambda: self.on_operation_started(
                 f"Refreshing packages from {manager.value}..."
@@ -181,6 +186,7 @@ class WinPacManMainWindow(QMainWindow):
         )
 
         # Start worker
+        print("[MainWindow] Starting worker thread")
         self.current_worker.start()
 
     def on_manager_changed(self, text: str):
@@ -215,6 +221,7 @@ class WinPacManMainWindow(QMainWindow):
     @pyqtSlot(str)
     def on_operation_started(self, message: str):
         """Handle operation start."""
+        print(f"[MainWindow] on_operation_started: {message}")
         self.operation_in_progress = True
         self.disable_controls()
         self.status_label.setText(message)
@@ -224,6 +231,7 @@ class WinPacManMainWindow(QMainWindow):
     @pyqtSlot(int, int, str)
     def on_progress_update(self, current: int, total: int, message: str):
         """Handle progress update (thread-safe via signal)."""
+        print(f"[MainWindow] on_progress_update: {current}/{total} - {message}")
         if total > 0:
             percentage = int((current / total) * 100)
             self.progress_bar.setValue(percentage)
@@ -233,8 +241,10 @@ class WinPacManMainWindow(QMainWindow):
     @pyqtSlot(list)
     def on_packages_loaded(self, packages: List[Package]):
         """Handle loaded packages."""
+        print(f"[MainWindow] on_packages_loaded: Received {len(packages)} packages")
         self.current_packages = packages
         self.package_table.set_packages(packages)
+        print(f"[MainWindow] Package table updated with {len(packages)} packages")
 
         # Show success message in status bar
         self.status_label.setText(f"Success: Loaded {len(packages)} packages")
@@ -245,6 +255,7 @@ class WinPacManMainWindow(QMainWindow):
     @pyqtSlot(str)
     def on_error(self, error_message: str):
         """Handle error."""
+        print(f"[MainWindow] on_error: {error_message}")
         QMessageBox.critical(
             self,
             "Error",
@@ -254,6 +265,7 @@ class WinPacManMainWindow(QMainWindow):
     @pyqtSlot()
     def on_operation_finished(self):
         """Handle operation completion."""
+        print("[MainWindow] on_operation_finished")
         self.operation_in_progress = False
         self.enable_controls()
         self.progress_bar.setVisible(False)

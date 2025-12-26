@@ -2,6 +2,102 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.0.1c] - 2025-12-26
+
+### Added - Phase 2: PyQt6 UI with Package Listing
+
+- **Main Application Window** (`ui/views/main_window.py`):
+  - `WinPacManMainWindow` class extending QMainWindow
+  - Modern control panel with package manager dropdown selector
+  - Action buttons: Refresh, Search, Install, Uninstall
+  - Status bar with integrated progress indicator
+  - Real-time operation status updates via QTimer
+  - Comprehensive error handling with user-friendly dialogs
+  - Theme support (light/dark) with stylesheet application
+
+- **Package Table Widget** (`ui/components/package_table.py`):
+  - `PackageTableWidget` custom QTableWidget for package display
+  - Color-coded rows by package manager:
+    - WinGet: Light green (#E8F5E8)
+    - Chocolatey: Light orange (#FFF4E6)
+    - Pip: Light blue (#E6F3FF)
+    - NPM: Light pink (#FCE6F3)
+  - Sortable columns: Package Name, Version, Manager, Description
+  - Explicit text color (black) for visibility on light backgrounds
+  - Single selection mode with row selection behavior
+  - Double-click signal for package details
+  - Automatic column sizing with interactive resize support
+
+- **Enhanced Package Workers** (`ui/workers/package_worker.py`):
+  - Progress tracking with current/total counts and status messages
+  - Detailed debug logging for troubleshooting
+  - Signal emissions: `started`, `progress`, `packages_loaded`, `error_occurred`, `finished`
+  - Thread-safe communication via pyqtSignal/pyqtSlot decorators
+
+- **Improved Error Handling** (`services/package_service.py`):
+  - JSON module properly imported at file level
+  - Separate exception handling for `FileNotFoundError` vs other errors
+  - User-friendly error messages with installation suggestions:
+    - **WinGet**: "Built into Windows 11. For Windows 10, install from Microsoft Store"
+    - **Chocolatey**: "Install from https://chocolatey.org/install"
+    - **Pip**: "Should be included with Python. Try 'python -m ensurepip'"
+    - **NPM**: "Install Node.js from https://nodejs.org to use NPM"
+  - Consistent error handling across all four package managers
+
+### Fixed
+
+- **Table Display Issue**: Added explicit `setForeground(QColor("#000000"))` to table cells
+  - Previously, text was invisible due to white/light text on light backgrounds
+  - Now displays black text on color-coded backgrounds for all package managers
+
+- **NPM JSON Import Error**: Moved `import json` from function body to module imports
+  - Fixed "cannot access local variable 'json' where it is not associated with a value" error
+  - Exception handler can now properly reference `json.JSONDecodeError`
+
+- **Package Manager Not Available**: Separated `FileNotFoundError` handling from general errors
+  - Now shows `PackageManagerNotAvailableError` with helpful installation instructions
+  - Previously showed generic "operation failed" messages
+
+### Changed
+
+- **Package Table Architecture**:
+  - Sorting disabled during population for performance
+  - Explicitly re-enabled after population complete
+  - Row count set before populating (avoids incremental resize)
+
+### Testing Phase 2
+
+```powershell
+# Activate environment
+.\winpacman_env_windows\Scripts\Activate.ps1
+
+# Launch PyQt6 GUI
+python gui_pyqt6.py
+
+# Test each package manager:
+# 1. Select "WinGet" → Click Refresh → Verify 90 packages displayed with light green rows
+# 2. Select "Chocolatey" → Click Refresh → Verify packages with light orange rows
+# 3. Select "Pip" → Click Refresh → Verify packages with light blue rows
+# 4. Select "NPM" → Click Refresh → Verify error message with installation link (if not installed)
+```
+
+### Notes
+
+- **Beta Release**: Phase 2 complete with functional package listing UI
+- **Description Column**: Reserved but blank (descriptions not available from list commands)
+  - Future enhancement: Can be populated via lazy loading or caching
+- **Responsiveness**: All operations run in QThread workers - UI never freezes
+- **Next Phase**: Phase 3 will implement Install/Uninstall functionality
+
+**Key Commits:**
+- `f1d784e`: Fix PyQt6 segmentation fault - migrate from FluentWindow to QMainWindow
+- `5aa783f`: Phase 2 Complete - FluentWindow UI with Package Listing
+
+**Tag:**
+- `v0.0.1c`: Beta release with Phase 2 complete
+
+---
+
 ## [0.0.1b] - 2025-12-26
 
 ### Added - Phase 1: PyQt6 Foundation

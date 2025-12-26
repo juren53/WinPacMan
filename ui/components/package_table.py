@@ -82,57 +82,68 @@ class PackageTableWidget(QTableWidget):
     def set_packages(self, packages: List[Package]):
         """
         Set packages to display in the table.
-        
+
         Args:
             packages: List of Package objects to display
         """
+        print(f"[PackageTable] set_packages called with {len(packages)} packages")
         self.packages = packages
-        
+
         # Disable sorting while populating (for performance)
         self.setSortingEnabled(False)
-        
+        print(f"[PackageTable] Sorting disabled")
+
         # Clear existing content
         self.setRowCount(0)
         self.setRowCount(len(packages))
-        
+        print(f"[PackageTable] Row count set to {len(packages)}")
+
         # Populate table
         for row, package in enumerate(packages):
+            if row < 3:  # Debug first 3 packages
+                print(f"[PackageTable] Row {row}: {package.name} v{package.version} ({package.manager.value})")
+
             # Package name
             name_item = QTableWidgetItem(package.name)
             self.setItem(row, 0, name_item)
-            
+
             # Version
             version_item = QTableWidgetItem(package.version)
             self.setItem(row, 1, version_item)
-            
+
             # Manager
             manager_item = QTableWidgetItem(package.manager.value)
             self.setItem(row, 2, manager_item)
-            
+
             # Description
             desc_item = QTableWidgetItem(package.description or "")
             self.setItem(row, 3, desc_item)
-            
+
             # Apply color coding
             self._apply_row_color(row, package.manager)
-        
+
+        print(f"[PackageTable] All {len(packages)} rows populated")
+
         # Re-enable sorting
         self.setSortingEnabled(True)
+        print(f"[PackageTable] Sorting re-enabled, table should now display")
     
     def _apply_row_color(self, row: int, manager: PackageManager):
         """
         Apply manager-specific color to row.
-        
+
         Args:
             row: Row index
             manager: Package manager type
         """
         color = self.MANAGER_COLORS.get(manager, QColor("#FFFFFF"))
-        
+        text_color = QColor("#000000")  # Black text for readability
+
         for col in range(self.columnCount()):
             item = self.item(row, col)
             if item:
                 item.setBackground(color)
+                item.setForeground(text_color)
     
     def get_selected_package(self) -> Optional[Package]:
         """
