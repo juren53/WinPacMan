@@ -2,6 +2,74 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.0.1b] - 2025-12-26
+
+### Added - Phase 1: PyQt6 Foundation
+
+- **PyQt6 Worker Framework** (`ui/workers/`):
+  - `PackageSignals` class with pyqtSignal definitions for thread-safe communication
+  - `PackageListWorker` (QThread): Non-blocking package listing with progress signals
+  - `PackageInstallWorker` (QThread): Non-blocking package installation
+  - `PackageUninstallWorker` (QThread): Non-blocking package uninstallation
+  - Event-driven architecture replacing polling-based threading
+  - Signals: `progress`, `packages_loaded`, `operation_complete`, `error_occurred`, `started`, `finished`
+
+- **PyQt6 Test GUI** (`gui_pyqt6.py`):
+  - Minimal test window demonstrating QThread worker functionality
+  - Signal/slot communication pattern with no UI freezing
+  - Progress bar and status updates via pyqtSignal
+  - Test button for WinGet package listing
+  - Proper worker lifecycle management with cleanup
+
+- **Dependencies Added** (`requirements.txt`):
+  - **PyQt-Fluent-Widgets 1.10.5**: Windows 11 Fluent Design components
+  - **PyQt6-Frameless-Window 0.7.4**: Modern frameless window styling
+  - **pywin32 311**: Windows integration (Mica effects, notifications)
+
+### Changed
+
+- **Threading Architecture**:
+  - Before: `threading.Thread` with `root.after(100ms)` polling
+  - After: `QThread` with `pyqtSignal`/`pyqtSlot` event-driven updates
+  - Eliminates polling overhead for smoother UI performance
+
+### Notes
+
+- **Beta Release**: Phase 1 foundation complete, GUI is minimal test implementation
+- **Tkinter Fallback**: `gui_tkinter.py` remains available and functional
+- **Service Layer**: No changes to `PackageManagerService` or `SettingsService` - full backward compatibility
+- **Next Phase**: Phase 2 will implement FluentWindow-based main UI with package table
+
+### Development Commands
+
+```powershell
+# Install Phase 1 dependencies
+.\winpacman_env_windows\Scripts\Activate.ps1
+pip install PyQt-Fluent-Widgets PyQt6-Frameless-Window pywin32
+
+# Test Phase 1 GUI
+python gui_pyqt6.py
+```
+
+### Testing Phase 1
+
+1. Launch `python gui_pyqt6.py`
+2. Click "Test WinGet List (QThread Worker)"
+3. Verify:
+   - Window remains responsive during operation
+   - Progress bar updates automatically
+   - Status messages change in real-time
+   - Package count displayed on completion
+   - No UI freezing or "white out"
+
+**Key Commits:**
+- `3457e97`: Phase 1 Complete - PyQt6 Foundation with QThread Workers
+
+**Tag:**
+- `v0.0.1b`: Beta release with Phase 1 complete
+
+---
+
 ## [0.0.1] - 2025-12-26
 
 ### Added
