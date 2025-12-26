@@ -7,9 +7,7 @@ packaging>=25.0
 # System utilities
 psutil>=7.0.0
 
-# PyQt6 Fluent Design UI
-PyQt-Fluent-Widgets>=1.5.0
-PyQt6-Frameless-Window>=0.4.0
+# PyQt6 UI (using standard widgets with custom styling)
 pywin32>=306
 
 # Development tools (install separately)

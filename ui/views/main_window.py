@@ -1,19 +1,16 @@
 """
-Main application window with Windows 11 Fluent Design.
+Main application window for WinPacMan.
 
-Provides the main user interface for WinPacMan using PyQt6 and
-qfluentwidgets for modern Fluent Design styling.
+Provides the main user interface for WinPacMan using PyQt6
+with modern styling.
 """
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QMessageBox, QPushButton, QComboBox, QProgressBar, QStatusBar
 )
-from PyQt6.QtCore import Qt, pyqtSlot
-from qfluentwidgets import (
-    FluentWindow, NavigationItemPosition, FluentIcon,
-    PushButton, ComboBox, ProgressBar, setTheme, Theme,
-    InfoBar, InfoBarPosition
-)
+from PyQt6.QtCore import Qt, pyqtSlot, QTimer
+from PyQt6.QtGui import QFont
 from typing import List, Optional
 
 from core.models import PackageManager, Package
@@ -23,12 +20,11 @@ from ui.workers.package_worker import PackageListWorker
 from ui.components.package_table import PackageTableWidget
 
 
-class WinPacManMainWindow(FluentWindow):
+class WinPacManMainWindow(QMainWindow):
     """
-    Main application window with modern Fluent Design.
+    Main application window with modern styling.
 
     Features:
-    - Windows 11 Fluent Design styling
     - Package manager selection
     - Non-blocking package operations via QThread workers
     - Real-time progress updates via signals
@@ -49,7 +45,7 @@ class WinPacManMainWindow(FluentWindow):
 
         # Setup
         self.init_window()
-        self.init_navigation()
+        self.init_ui()
         self.apply_theme()
 
     def init_window(self):
@@ -57,47 +53,29 @@ class WinPacManMainWindow(FluentWindow):
         self.setWindowTitle("WinPacMan - Windows Package Manager")
         self.resize(1000, 700)
 
-        # Try to enable Mica effect (Windows 11 only)
-        try:
-            self.setMicaEffectEnabled(True)
-        except Exception:
-            pass  # Mica not available on this system
+    def init_ui(self):
+        """Setup user interface."""
+        # Create main widget and layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
 
-    def init_navigation(self):
-        """Setup navigation interface."""
-        # Create packages interface
-        self.packages_interface = self.create_packages_interface()
-
-        # Add to navigation
-        self.addSubInterface(
-            self.packages_interface,
-            FluentIcon.LIBRARY,
-            "Packages"
-        )
-
-    def create_packages_interface(self) -> QWidget:
-        """Create main packages interface."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(10)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(10)
 
         # Control panel
         control_layout = self.create_control_panel()
-        layout.addLayout(control_layout)
+        main_layout.addLayout(control_layout)
 
         # Package table
         self.package_table = PackageTableWidget()
         self.package_table.package_double_clicked.connect(
             self.on_package_details
         )
-        layout.addWidget(self.package_table)
+        main_layout.addWidget(self.package_table)
 
-        # Status bar
-        status_layout = self.create_status_bar()
-        layout.addLayout(status_layout)
-
-        return widget
+        # Status bar at bottom
+        self.create_status_bar()
 
     def create_control_panel(self) -> QHBoxLayout:
         """Create control panel with manager selector and buttons."""
@@ -109,7 +87,7 @@ class WinPacManMainWindow(FluentWindow):
         layout.addWidget(label)
 
         # Package manager selector
-        self.manager_combo = ComboBox()
+        self.manager_combo = QComboBox()
         self.manager_combo.addItems(["WinGet", "Chocolatey", "Pip", "NPM"])
         self.manager_combo.setCurrentIndex(0)
         self.manager_combo.setFixedWidth(150)
@@ -120,49 +98,44 @@ class WinPacManMainWindow(FluentWindow):
         layout.addStretch()
 
         # Refresh button
-        self.refresh_btn = PushButton(FluentIcon.SYNC, "Refresh")
+        self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.clicked.connect(self.refresh_packages)
         layout.addWidget(self.refresh_btn)
 
         # Search button (placeholder for Phase 4)
-        self.search_btn = PushButton(FluentIcon.SEARCH, "Search")
+        self.search_btn = QPushButton("Search")
         self.search_btn.clicked.connect(self.search_packages)
         self.search_btn.setEnabled(False)
         layout.addWidget(self.search_btn)
 
         # Install button (placeholder for Phase 3)
-        self.install_btn = PushButton(FluentIcon.DOWNLOAD, "Install")
+        self.install_btn = QPushButton("Install")
         self.install_btn.clicked.connect(self.install_package)
         self.install_btn.setEnabled(False)
         layout.addWidget(self.install_btn)
 
         # Uninstall button (placeholder for Phase 3)
-        self.uninstall_btn = PushButton(FluentIcon.DELETE, "Uninstall")
+        self.uninstall_btn = QPushButton("Uninstall")
         self.uninstall_btn.clicked.connect(self.uninstall_package)
         self.uninstall_btn.setEnabled(False)
         layout.addWidget(self.uninstall_btn)
 
         return layout
 
-    def create_status_bar(self) -> QHBoxLayout:
+    def create_status_bar(self):
         """Create status bar with progress indicator."""
-        layout = QHBoxLayout()
-        layout.setSpacing(10)
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
 
         # Status label
         self.status_label = QLabel("Ready")
-        layout.addWidget(self.status_label)
+        self.status_bar.addWidget(self.status_label)
 
-        # Spacer
-        layout.addStretch()
-
-        # Progress bar
-        self.progress_bar = ProgressBar()
+        # Progress bar (on right side)
+        self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         self.progress_bar.setFixedWidth(200)
-        layout.addWidget(self.progress_bar)
-
-        return layout
+        self.status_bar.addPermanentWidget(self.progress_bar)
 
     def get_selected_manager(self) -> PackageManager:
         """Get currently selected package manager."""
@@ -177,14 +150,10 @@ class WinPacManMainWindow(FluentWindow):
     def refresh_packages(self):
         """Refresh package list using QThread worker."""
         if self.operation_in_progress:
-            InfoBar.warning(
-                title="Operation In Progress",
-                content="Please wait for the current operation to complete.",
-                orient=Qt.Orientation.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                duration=3000,
-                parent=self
+            QMessageBox.warning(
+                self,
+                "Operation In Progress",
+                "Please wait for the current operation to complete."
             )
             return
 
@@ -221,38 +190,26 @@ class WinPacManMainWindow(FluentWindow):
 
     def search_packages(self):
         """Search packages (placeholder for Phase 4)."""
-        InfoBar.info(
-            title="Coming Soon",
-            content="Search functionality will be implemented in Phase 4.",
-            orient=Qt.Orientation.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=3000,
-            parent=self
+        QMessageBox.information(
+            self,
+            "Coming Soon",
+            "Search functionality will be implemented in Phase 4."
         )
 
     def install_package(self):
         """Install package (placeholder for Phase 3)."""
-        InfoBar.info(
-            title="Coming Soon",
-            content="Install functionality will be implemented in Phase 3.",
-            orient=Qt.Orientation.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=3000,
-            parent=self
+        QMessageBox.information(
+            self,
+            "Coming Soon",
+            "Install functionality will be implemented in Phase 3."
         )
 
     def uninstall_package(self):
         """Uninstall package (placeholder for Phase 3)."""
-        InfoBar.info(
-            title="Coming Soon",
-            content="Uninstall functionality will be implemented in Phase 3.",
-            orient=Qt.Orientation.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=3000,
-            parent=self
+        QMessageBox.information(
+            self,
+            "Coming Soon",
+            "Uninstall functionality will be implemented in Phase 3."
         )
 
     @pyqtSlot(str)
@@ -279,28 +236,19 @@ class WinPacManMainWindow(FluentWindow):
         self.current_packages = packages
         self.package_table.set_packages(packages)
 
-        # Show success notification
-        InfoBar.success(
-            title="Success",
-            content=f"Loaded {len(packages)} packages",
-            orient=Qt.Orientation.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=2000,
-            parent=self
-        )
+        # Show success message in status bar
+        self.status_label.setText(f"Success: Loaded {len(packages)} packages")
+
+        # Auto-clear success message after 3 seconds
+        QTimer.singleShot(3000, lambda: self.status_label.setText("Ready"))
 
     @pyqtSlot(str)
     def on_error(self, error_message: str):
         """Handle error."""
-        InfoBar.error(
-            title="Error",
-            content=error_message,
-            orient=Qt.Orientation.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            duration=5000,
-            parent=self
+        QMessageBox.critical(
+            self,
+            "Error",
+            error_message
         )
 
     @pyqtSlot()
@@ -308,7 +256,6 @@ class WinPacManMainWindow(FluentWindow):
         """Handle operation completion."""
         self.operation_in_progress = False
         self.enable_controls()
-        self.status_label.setText("Ready")
         self.progress_bar.setVisible(False)
 
         # Clean up worker
@@ -344,9 +291,61 @@ class WinPacManMainWindow(FluentWindow):
     def apply_theme(self):
         """Apply theme from settings."""
         theme = self.settings_service.get_theme()
+
+        # Apply basic stylesheet based on theme
         if theme == "dark":
-            setTheme(Theme.DARK)
-        elif theme == "light":
-            setTheme(Theme.LIGHT)
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #1e1e1e;
+                    color: #ffffff;
+                }
+                QWidget {
+                    background-color: #1e1e1e;
+                    color: #ffffff;
+                }
+                QPushButton {
+                    background-color: #0078d4;
+                    color: #ffffff;
+                    border: none;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #1984d8;
+                }
+                QPushButton:disabled {
+                    background-color: #2d2d2d;
+                    color: #666666;
+                }
+                QComboBox {
+                    background-color: #2d2d2d;
+                    color: #ffffff;
+                    border: 1px solid #3d3d3d;
+                    padding: 4px;
+                }
+                QLabel {
+                    color: #ffffff;
+                }
+                QStatusBar {
+                    background-color: #2d2d2d;
+                    color: #ffffff;
+                }
+            """)
         else:
-            setTheme(Theme.AUTO)
+            # Light theme or auto (default PyQt6 styling)
+            self.setStyleSheet("""
+                QPushButton {
+                    background-color: #0078d4;
+                    color: #ffffff;
+                    border: none;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #1984d8;
+                }
+                QPushButton:disabled {
+                    background-color: #cccccc;
+                    color: #666666;
+                }
+            """)

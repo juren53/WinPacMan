@@ -1,0 +1,19 @@
+Architecture Decisions (Updated 2025-12-26):
+
+Architecture:
+✅ Strategy Pattern implemented for package managers (PackageManagerService)
+✅ Configuration management: JSON settings with XDG compliance (SettingsService)
+✅ Threading: QThread-based workers with pyqtSignal for non-blocking operations
+✅ Layered architecture: Presentation (UI) -> Service -> Core -> Infrastructure
+
+UI/UX:
+✅ Phase 1-2 Complete: Standard PyQt6 widgets with custom stylesheets
+✅ Modern styling using Qt CSS (Windows 11 inspired blue accents)
+❌ PyQt-Fluent-Widgets abandoned due to PyQt5/PyQt6 incompatibility
+✅ Color-coded package table (green=WinGet, orange=Choco, blue=Pip, pink=NPM)
+⏳ Frameless window design: Deferred to Phase 4 (polish)
+
+Next Steps:
+- Phase 2: Complete manual testing (12 tests in MANUAL_TEST_GUIDE.md)
+- Phase 3: Implement Install/Uninstall operations
+- Phase 4: Search functionality and settings page 
