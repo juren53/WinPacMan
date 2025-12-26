@@ -1,0 +1,227 @@
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+
+
+class PackageManager(Enum):
+    """Supported package managers"""
+    WINGET = "winget"
+    CHOCOLATEY = "chocolatey"
+    PIP = "pip"
+    NPM = "npm"
+
+
+class PackageStatus(Enum):
+    """Package installation status"""
+    INSTALLED = "installed"
+    AVAILABLE = "available"
+    OUTDATED = "outdated"
+    INSTALLING = "installing"
+    UNINSTALLING = "uninstalling"
+    UPDATING = "updating"
+    FAILED = "failed"
+
+
+class OperationType(Enum):
+    """Types of operations on packages"""
+    INSTALL = "install"
+    UNINSTALL = "uninstall"
+    UPDATE = "update"
+    SEARCH = "search"
+    LIST = "list"
+
+
+class OperationStage(Enum):
+    """Stages of package operations"""
+    QUEUED = "queued"
+    DOWNLOADING = "downloading"
+    INSTALLING = "installing"
+    CONFIGURING = "configuring"
+    COMPLETE = "complete"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class Package:
+    """Represents a software package"""
+    name: str
+    id: str
+    version: str
+    manager: PackageManager
+    status: PackageStatus = PackageStatus.AVAILABLE
+    description: Optional[str] = None
+    size: Optional[str] = None
+    publisher: Optional[str] = None
+    homepage: Optional[str] = None
+    install_date: Optional[datetime] = None
+    update_available: Optional[str] = None
+    tags: List[str] = field(default_factory=list)
+    dependencies: List[str] = field(default_factory=list)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert package to dictionary for JSON serialization"""
+        return {
+            "name": self.name,
+            "id": self.id,
+            "version": self.version,
+            "manager": self.manager.value,
+            "status": self.status.value,
+            "description": self.description,
+            "size": self.size,
+            "publisher": self.publisher,
+            "homepage": self.homepage,
+            "install_date": self.install_date.isoformat() if self.install_date else None,
+            "update_available": self.update_available,
+            "tags": self.tags,
+            "dependencies": self.dependencies
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Package':
+        """Create package from dictionary"""
+        return cls(
+            name=data["name"],
+            id=data["id"],
+            version=data["version"],
+            manager=PackageManager(data["manager"]),
+            status=PackageStatus(data.get("status", "available")),
+            description=data.get("description"),
+            size=data.get("size"),
+            publisher=data.get("publisher"),
+            homepage=data.get("homepage"),
+            install_date=datetime.fromisoformat(data["install_date"]) if data.get("install_date") else None,
+            update_available=data.get("update_available"),
+            tags=data.get("tags", []),
+            dependencies=data.get("dependencies", [])
+        )
+
+
+@dataclass
+class OperationProgress:
+    """Progress information for package operations"""
+    operation: str
+    package: str
+    stage: str
+    current: int = 0
+    total: int = 100
+    message: str = ""
+    speed: Optional[float] = None
+    eta: Optional[int] = None
+    error: Optional[str] = None
+    
+    @property
+    def percentage(self) -> float:
+        """Calculate progress percentage"""
+        if self.total > 0:
+            return (self.current / self.total) * 100
+        return 0.0
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "operation": self.operation,
+            "package": self.package,
+            "stage": self.stage,
+            "current": self.current,
+            "total": self.total,
+            "message": self.message,
+            "speed": self.speed,
+            "eta": self.eta,
+            "error": self.error
+        }
+
+
+@dataclass
+class OperationResult:
+    """Result of a package operation"""
+    operation: str
+    package: str
+    success: bool
+    message: str
+    details: Optional[Dict[str, Any]] = None
+    timestamp: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "operation": self.operation,
+            "package": self.package,
+            "success": self.success,
+            "message": self.message,
+            "details": self.details,
+            "timestamp": self.timestamp.isoformat()
+        }
+
+
+@dataclass
+class SearchQuery:
+    """Search query for package discovery"""
+    query: str
+    manager: Optional[PackageManager] = None
+    category: Optional[str] = None
+    include_installed: bool = True
+    include_available: bool = True
+    exact_match: bool = False
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            "query": self.query,
+            "manager": self.manager.value if self.manager else None,
+            "category": self.category,
+            "include_installed": self.include_installed,
+            "include_available": self.include_available,
+            "exact_match": self.exact_match
+        }
+
+
+@dataclass
+class PackageListResult:
+    """Result of package listing operation"""
+    packages: List[Package]
+    total_count: int
+    query: Optional[SearchQuery] = None
+    source: Optional[str] = None
+    timestamp: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "packages": [pkg.to_dict() for pkg in self.packages],
+            "total_count": self.total_count,
+            "query": self.query.to_dict() if self.query else None,
+            "source": self.source,
+            "timestamp": self.timestamp.isoformat()
+        }
+
+
+# Custom exceptions for package management
+class PackageManagerError(Exception):
+    """Base exception for package manager operations"""
+    pass
+
+
+class PackageNotFoundError(PackageManagerError):
+    """Exception raised when a package is not found"""
+    def __init__(self, package_id: str, manager: str):
+        super().__init__(f"Package '{package_id}' not found in {manager}")
+        self.package_id = package_id
+        self.manager = manager
+
+
+class OperationFailedError(PackageManagerError):
+    """Exception raised when an operation fails"""
+    def __init__(self, operation: str, package: str, message: str):
+        super().__init__(f"{operation} failed for {package}: {message}")
+        self.operation = operation
+        self.package = package
+        self.message = message
+
+
+class PackageManagerNotAvailableError(PackageManagerError):
+    """Exception raised when a package manager is not available"""
+    def __init__(self, manager: str):
+        super().__init__(f"Package manager '{manager}' is not available")
+        self.manager = manager

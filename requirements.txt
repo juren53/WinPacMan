@@ -1,0 +1,14 @@
+# Core dependencies
+PyQt6>=6.0.0
+xdg-base-dirs>=6.0.0
+requests>=2.32.0
+packaging>=25.0
+
+# System utilities
+psutil>=7.0.0
+
+# Development tools (install separately)
+# black>=25.0.0
+# mypy>=1.19.0
+# pytest>=9.0.0
+# pytest-qt>=4.5.0
