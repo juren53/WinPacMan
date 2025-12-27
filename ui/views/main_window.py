@@ -611,7 +611,11 @@ class WinPacManMainWindow(QMainWindow):
 
     def _get_winget_install_location(self, package_id: str) -> Optional[str]:
         """
-        Get installation location for a WinGet package by querying Windows Registry.
+        Get installation location for a WinGet package.
+
+        Strategy:
+        1. Try Windows Registry (for traditionally installed apps)
+        2. If not found, query WinGet directly (for WinGet-managed apps)
 
         Uses very strict matching to avoid false positives. Better to show no path
         than the wrong path.
@@ -619,6 +623,7 @@ class WinPacManMainWindow(QMainWindow):
         import winreg
         import os
         import re
+        import subprocess
 
         def normalize_name(name: str) -> str:
             """Normalize name by removing spaces, hyphens, and lowercasing."""
@@ -864,7 +869,42 @@ class WinPacManMainWindow(QMainWindow):
                 else:
                     print(f"[InstallPath] ✗ Best match confidence too low ({candidates[0][0]}), returning None")
             else:
-                print(f"[InstallPath] No candidates found")
+                print(f"[InstallPath] No candidates found in registry")
+
+            # Fallback: Query WinGet directly for installation location
+            print(f"[InstallPath] Trying winget show as fallback...")
+            try:
+                result = subprocess.run(
+                    ['winget', 'show', '--id', package_id, '--accept-source-agreements'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    encoding='utf-8',
+                    errors='ignore'
+                )
+
+                if result.returncode == 0:
+                    # Parse output for "Install Location:" or "Installation Folder:"
+                    for line in result.stdout.splitlines():
+                        line_lower = line.lower().strip()
+                        if 'install location:' in line_lower or 'installation folder:' in line_lower:
+                            # Extract path after the colon
+                            parts = line.split(':', 1)
+                            if len(parts) == 2:
+                                install_path = parts[1].strip()
+                                if install_path and os.path.exists(install_path):
+                                    print(f"[InstallPath] ✓ Found via winget show: {install_path}")
+                                    return install_path
+                                else:
+                                    print(f"[InstallPath] Path from winget doesn't exist: {install_path}")
+                    print(f"[InstallPath] winget show returned no install location")
+                else:
+                    print(f"[InstallPath] winget show failed (exit code {result.returncode})")
+
+            except subprocess.TimeoutExpired:
+                print(f"[InstallPath] winget show timed out")
+            except Exception as e:
+                print(f"[InstallPath] winget show error: {e}")
 
             return None
 
