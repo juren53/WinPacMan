@@ -2,6 +2,27 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.2] - 2025-12-27 (In Development)
+
+### Planned - Metadata Cache and Search System (Phase 1)
+
+**Goal:** Implement unified metadata caching system for fast cross-repository package search, inspired by APT's architecture.
+
+**Phase 1 Scope (WinGet Only):**
+- Implement `WinGetProvider` to read from WinGet's `index.db`
+- Create `MetadataCacheService` with SQLite cache and FTS5 search
+- Add search bar UI component to main window
+- Enable instant search results (<100ms vs current 2-5 second subprocess calls)
+
+**Architecture:**
+- Provider/Bridge pattern for extensibility
+- SQLite with FTS5 for fast full-text search
+- Background cache refresh workers
+- Unified `UniversalPackageMetadata` model
+
+**Documentation:**
+- See `notes/metadata_cache_architecture.md` for full design
+
 ## [0.3.1] - 2025-12-27 02:15
 
 ### Major Improvements - Installation Path Detection
