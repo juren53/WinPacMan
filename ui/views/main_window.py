@@ -613,70 +613,159 @@ class WinPacManMainWindow(QMainWindow):
         """
         Get installation location for a WinGet package by querying Windows Registry.
 
-        WinGet doesn't expose installation paths via CLI, so we query the registry
-        where most applications register their install location.
+        Uses very strict matching to avoid false positives. Better to show no path
+        than the wrong path.
         """
         import winreg
         import os
+        import re
+
+        def normalize_name(name: str) -> str:
+            """Normalize name by removing spaces, hyphens, and lowercasing."""
+            return re.sub(r'[\s\-_]', '', name.lower())
+
+        def get_install_path(app_key):
+            """Try to extract install location from registry key."""
+            try:
+                install_location = winreg.QueryValueEx(app_key, "InstallLocation")[0]
+                if install_location and install_location.strip() and os.path.exists(install_location.strip()):
+                    return install_location.strip()
+            except FileNotFoundError:
+                pass
+
+            try:
+                install_path = winreg.QueryValueEx(app_key, "InstallPath")[0]
+                if install_path and install_path.strip() and os.path.exists(install_path.strip()):
+                    return install_path.strip()
+            except FileNotFoundError:
+                pass
+
+            return None
 
         try:
-            # Common registry paths where apps register install info
+            print(f"[InstallPath] Looking for: {package_id}")
+
             registry_paths = [
                 (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
                 (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
                 (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
             ]
 
-            # Extract the package name (last part of package ID after the dot)
-            # e.g., "Mozilla.Firefox" -> "Firefox", "Obsidian.Obsidian" -> "Obsidian"
-            package_name = package_id.split('.')[-1].lower()
+            # Prepare search terms: full package ID and individual parts
+            package_id_normalized = normalize_name(package_id)
+            package_parts = package_id.split('.')
+
+            # Create list of search terms to try (in priority order)
+            search_terms = []
+            if len(package_parts) > 1:
+                # For "CPUID.HWMonitor", try: full ID, last part, first part
+                search_terms.append((package_id_normalized, "full_id", 100))  # Base confidence for full ID
+                search_terms.append((normalize_name(package_parts[-1]), "product", 80))  # Product name
+                search_terms.append((normalize_name(package_parts[0]), "publisher", 70))  # Publisher name
+            else:
+                # Single-part ID
+                search_terms.append((package_id_normalized, "full_id", 100))
+
+            print(f"[InstallPath] Search terms: {[term for term, _, _ in search_terms]}")
+
+            # Collect all candidates with confidence scores
+            candidates = []
 
             for hkey, registry_path in registry_paths:
                 try:
-                    # Open the uninstall registry key
                     with winreg.OpenKey(hkey, registry_path) as reg_key:
-                        # Enumerate all subkeys (installed applications)
                         num_subkeys = winreg.QueryInfoKey(reg_key)[0]
-
                         for i in range(num_subkeys):
                             try:
                                 subkey_name = winreg.EnumKey(reg_key, i)
-
                                 with winreg.OpenKey(reg_key, subkey_name) as app_key:
                                     try:
-                                        # Get the DisplayName
                                         display_name = winreg.QueryValueEx(app_key, "DisplayName")[0]
+                                        install_path = get_install_path(app_key)
 
-                                        # Check if this matches our package (case-insensitive)
-                                        if package_name in display_name.lower() or display_name.lower() in package_name:
-                                            # Try to get InstallLocation
-                                            try:
-                                                install_location = winreg.QueryValueEx(app_key, "InstallLocation")[0]
-                                                if install_location and os.path.exists(install_location):
-                                                    return install_location
-                                            except FileNotFoundError:
-                                                # InstallLocation not found, try InstallPath
-                                                try:
-                                                    install_path = winreg.QueryValueEx(app_key, "InstallPath")[0]
-                                                    if install_path and os.path.exists(install_path):
-                                                        return install_path
-                                                except FileNotFoundError:
-                                                    pass
+                                        if not install_path or not display_name:
+                                            continue
+
+                                        display_normalized = normalize_name(display_name)
+                                        subkey_normalized = normalize_name(subkey_name)
+
+                                        # Try each search term and use the highest confidence match
+                                        best_confidence = 0
+                                        match_reason = ""
+
+                                        for search_term, term_type, base_confidence in search_terms:
+                                            confidence = 0
+
+                                            # Check registry subkey name first (often contains package ID)
+                                            if search_term == subkey_normalized:
+                                                confidence = base_confidence + 20
+                                                match_reason = f"subkey_exact_{term_type}"
+                                            elif search_term in subkey_normalized and len(search_term) > 3:
+                                                confidence = base_confidence + 10
+                                                match_reason = f"subkey_contains_{term_type}"
+                                            # Check display name
+                                            elif display_normalized == search_term:
+                                                confidence = base_confidence
+                                                match_reason = f"display_exact_{term_type}"
+                                            elif display_normalized.startswith(search_term):
+                                                confidence = base_confidence - 10
+                                                match_reason = f"display_starts_{term_type}"
+                                            elif search_term in display_normalized and len(search_term) > 3:
+                                                # Only match if it's a whole word (surrounded by non-letters)
+                                                pattern = rf'(^|[^a-z]){re.escape(search_term)}($|[^a-z])'
+                                                if re.search(pattern, display_normalized):
+                                                    confidence = base_confidence - 20
+                                                    match_reason = f"display_word_{term_type}"
+
+                                            # Update best confidence
+                                            if confidence > best_confidence:
+                                                best_confidence = confidence
+                                                match_reason = match_reason
+
+                                        # Boost if install path contains any search term
+                                        if best_confidence > 0:
+                                            for search_term, term_type, _ in search_terms:
+                                                if search_term in install_path.lower() and len(search_term) > 3:
+                                                    best_confidence += 5
+                                                    break
+
+                                        # Only add if we have a reasonable match
+                                        if best_confidence >= 60:
+                                            candidates.append((best_confidence, display_name, install_path, match_reason, subkey_name))
+
                                     except FileNotFoundError:
-                                        # DisplayName not found, skip this entry
                                         pass
                             except OSError:
-                                # Can't access this subkey, skip it
                                 continue
-
                 except FileNotFoundError:
-                    # Registry path doesn't exist
                     continue
 
-        except Exception as e:
-            print(f"Failed to get install location from registry: {e}")
+            # Sort by confidence (highest first)
+            candidates.sort(key=lambda x: x[0], reverse=True)
 
-        return None
+            if candidates:
+                print(f"[InstallPath] Found {len(candidates)} candidates:")
+                for conf, name, path, reason, subkey in candidates[:5]:  # Show top 5
+                    print(f"  [{conf}] {name}")
+                    print(f"       Reason: {reason}, Subkey: {subkey}")
+                    print(f"       Path: {path}")
+
+                # Only return if confidence is high enough (>= 70 to be more strict)
+                if candidates[0][0] >= 70:
+                    print(f"[InstallPath] ✓ Returning best match: {candidates[0][1]}")
+                    return candidates[0][2]
+                else:
+                    print(f"[InstallPath] ✗ Best match confidence too low ({candidates[0][0]}), returning None")
+            else:
+                print(f"[InstallPath] No candidates found")
+
+            return None
+
+        except Exception as e:
+            print(f"[InstallPath] ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     def on_package_details(self, package: Package):
         """Show package details dialog with copy to clipboard functionality."""

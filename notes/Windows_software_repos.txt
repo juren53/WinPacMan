@@ -1,0 +1,11 @@
+Windows Repos:
+
+WinGet
+Chocolatey
+Npm
+Pip
+Cargo
+Scoop
+PowerShell 7.x
+PowerShell 5.x
+Local
