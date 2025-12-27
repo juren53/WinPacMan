@@ -629,7 +629,7 @@ class WinPacManMainWindow(QMainWindow):
             """Normalize name by removing spaces, hyphens, and lowercasing."""
             return re.sub(r'[\s\-_]', '', name.lower())
 
-        def get_install_path(app_key, debug_name=None):
+        def get_install_path(app_key):
             """Try to extract install location from registry key using multiple methods."""
             # Method 1: InstallLocation field
             try:
@@ -651,9 +651,6 @@ class WinPacManMainWindow(QMainWindow):
             try:
                 uninstall_string = winreg.QueryValueEx(app_key, "UninstallString")[0]
                 if uninstall_string:
-                    if debug_name and "vim" in debug_name.lower():
-                        print(f"[DEBUG] {debug_name} UninstallString: {uninstall_string}")
-
                     # Extract directory from uninstall path
                     # e.g., "C:\Program Files\Vim\vim91\uninstall.exe" -> "C:\Program Files\Vim"
                     match = re.search(r'^"?([A-Z]:[^"]+?)\\[^\\]+\.exe', uninstall_string, re.IGNORECASE)
@@ -661,19 +658,12 @@ class WinPacManMainWindow(QMainWindow):
                         path = match.group(1)
                         # Go up one or two directories to find the base install folder
                         parent = os.path.dirname(path)
-
-                        if debug_name and "vim" in debug_name.lower():
-                            print(f"[DEBUG] Extracted path: {path}, Parent: {parent}")
-                            print(f"[DEBUG] Parent exists: {os.path.exists(parent) if parent else 'N/A'}")
-                            print(f"[DEBUG] Path exists: {os.path.exists(path) if path else 'N/A'}")
-
                         if parent and os.path.exists(parent):
                             return parent
                         if path and os.path.exists(path):
                             return path
             except FileNotFoundError:
-                if debug_name and "vim" in debug_name.lower():
-                    print(f"[DEBUG] {debug_name} has no UninstallString")
+                pass
 
             # Method 4: Extract from InstallString
             try:
@@ -801,7 +791,7 @@ class WinPacManMainWindow(QMainWindow):
                                 with winreg.OpenKey(reg_key, subkey_name) as app_key:
                                     try:
                                         display_name = winreg.QueryValueEx(app_key, "DisplayName")[0]
-                                        install_path = get_install_path(app_key, debug_name=display_name)
+                                        install_path = get_install_path(app_key)
 
                                         # Track ALL entries with DisplayName (even without install path)
                                         if display_name:
