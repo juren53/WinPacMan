@@ -2,6 +2,16 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.1c] - 2025-12-27
+
+### Maintenance Release - Version Bump and Documentation Update
+
+- Updated version to v0.5.1c for release coordination
+- Prepared changelog for version tagging
+- Maintained all existing functionality from v0.5.1b
+
+---
+
 ## [0.5.1b] - 2025-12-27
 
 ### Major UX Improvement - Smart Manager Resolution & Unified Display
