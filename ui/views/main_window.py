@@ -630,7 +630,8 @@ class WinPacManMainWindow(QMainWindow):
             return re.sub(r'[\s\-_]', '', name.lower())
 
         def get_install_path(app_key):
-            """Try to extract install location from registry key."""
+            """Try to extract install location from registry key using multiple methods."""
+            # Method 1: InstallLocation field
             try:
                 install_location = winreg.QueryValueEx(app_key, "InstallLocation")[0]
                 if install_location and install_location.strip() and os.path.exists(install_location.strip()):
@@ -638,10 +639,44 @@ class WinPacManMainWindow(QMainWindow):
             except FileNotFoundError:
                 pass
 
+            # Method 2: InstallPath field
             try:
                 install_path = winreg.QueryValueEx(app_key, "InstallPath")[0]
                 if install_path and install_path.strip() and os.path.exists(install_path.strip()):
                     return install_path.strip()
+            except FileNotFoundError:
+                pass
+
+            # Method 3: Extract from UninstallString (often contains path to uninstaller)
+            try:
+                uninstall_string = winreg.QueryValueEx(app_key, "UninstallString")[0]
+                if uninstall_string:
+                    # Extract directory from uninstall path
+                    # e.g., "C:\Program Files\Vim\vim91\uninstall.exe" -> "C:\Program Files\Vim"
+                    match = re.search(r'^"?([A-Z]:[^"]+?)\\[^\\]+\.exe', uninstall_string, re.IGNORECASE)
+                    if match:
+                        path = match.group(1)
+                        # Go up one or two directories to find the base install folder
+                        parent = os.path.dirname(path)
+                        if parent and os.path.exists(parent):
+                            return parent
+                        if path and os.path.exists(path):
+                            return path
+            except FileNotFoundError:
+                pass
+
+            # Method 4: Extract from InstallString
+            try:
+                install_string = winreg.QueryValueEx(app_key, "InstallString")[0]
+                if install_string:
+                    match = re.search(r'^"?([A-Z]:[^"]+?)\\[^\\]+\.exe', install_string, re.IGNORECASE)
+                    if match:
+                        path = match.group(1)
+                        parent = os.path.dirname(path)
+                        if parent and os.path.exists(parent):
+                            return parent
+                        if path and os.path.exists(path):
+                            return path
             except FileNotFoundError:
                 pass
 
