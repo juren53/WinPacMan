@@ -2,6 +2,125 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2025-12-27 02:15
+
+### Major Improvements - Installation Path Detection
+
+**Problem:** Installation paths showed 50% correct, 25% no path, 25% wrong paths (e.g., Vim/Quod Libet showing CPUID HWMonitor's path).
+
+**Solution:** Complete overhaul of registry-based path detection system.
+
+**Results:**
+- **Before:** 52/138 packages (38%) with valid installation paths
+- **After:** 84/138 packages (61%) with valid installation paths
+- **Improvement:** +32 packages detected (+62% increase!)
+
+### Added
+
+- **UninstallString Path Extraction** (`ui/views/main_window.py`):
+  - New Method 3: Extract from `UninstallString` registry field
+  - New Method 4: Extract from `InstallString` registry field
+  - Regex pattern extracts directory from executable paths:
+    - Example: `"C:\Program Files\Vim\vim91\uninstall.exe"` → `C:\Program Files\Vim`
+  - Handles quoted and unquoted paths
+  - Validates extracted paths exist on disk
+  - **Impact:** Fixed Vim, Notepad++, Armoury Crate Service, and many others
+
+- **Smart Parent/Path Selection** (`ui/views/main_window.py`):
+  - Intelligent decision logic: use extracted path vs. parent directory
+  - Detects version subdirectories via pattern matching:
+    - Version numbers: `vim91`, `v1.2.3`, `3.14`
+    - Architecture subdirs: `x64`, `x86`, `win64`
+    - Common subdirs: `bin`, `app`, `uninstall`, `install`
+  - **Examples:**
+    - Vim: `C:\...\Vim\vim91\...` → returns `C:\...\Vim` (parent)
+    - Notepad++: `C:\...\Notepad++\...` → returns `C:\...\Notepad++` (path)
+  - **Impact:** Prevents showing `C:\Program Files` (too high) or versioned subdirs
+
+- **Multi-Hive Registry Search for ARP Packages** (`ui/views/main_window.py`):
+  - ARP packages now search ALL registry hives (HKLM + HKCU)
+  - Prioritizes indicated hive but falls back to others
+  - Handles cases where WinGet's ARP hive indication is inaccurate
+  - **Impact:** Finds user-level installations missed by machine-only search
+
+- **Enhanced ARP Package Matching** (`ui/views/main_window.py`):
+  - ARP format detection: `ARP\Machine\X64\PackageName`
+  - Extracts actual package ID from ARP path
+  - Matches against both registry subkey name AND DisplayName
+  - Confidence-based scoring:
+    - 150: Exact ARP subkey match
+    - 145: Exact DisplayName match
+    - 115: Normalized DisplayName match
+  - **Impact:** Fixed exact-match packages like "Vim 9.1" that weren't being found
+
+- **Debug Output Enhancements** (`ui/views/main_window.py`):
+  - Shows total registry entries scanned
+  - Sample of entries with/without install paths (✓/✗ indicators)
+  - Match reason tracking (e.g., "subkey_exact_arp_normalized")
+  - Confidence scores for all candidates
+  - **Impact:** Made troubleshooting installation path issues transparent
+
+### Fixed
+
+- **Installation Path Accuracy** (`ui/views/main_window.py`):
+  - Fixed: Vim 9.1 now shows `C:\Program Files\Vim` ✓
+  - Fixed: Notepad++ now shows `C:\Program Files\Notepad++` ✓ (was showing `C:\Program Files`)
+  - Fixed: Armoury Crate Service now shows path ✓ (was showing no path)
+  - Fixed: Quod Libet no longer shows CPUID HWMonitor's path
+  - Fixed: Mozilla Firefox shows correct path from 2 candidates
+  - Fixed: Version-only package IDs (e.g., "4.7.1") now skipped entirely
+
+- **ARP Package Handling** (`ui/views/main_window.py`):
+  - Fixed: `winget show` no longer called for ARP packages (prevents error 2316632084)
+  - Fixed: ARP packages search correct registry hives
+  - Fixed: Case-sensitive vs case-insensitive matching for ARP subkeys
+
+### Technical Details
+
+**Path Extraction Methods (in priority order):**
+1. `InstallLocation` field (direct registry value)
+2. `InstallPath` field (alternate registry field)
+3. `UninstallString` field (NEW - parse uninstaller path)
+4. `InstallString` field (NEW - parse installer path)
+
+**Regex Pattern for Path Extraction:**
+```regex
+^"?([A-Z]:[^"]+?)\\[^\\]+\.exe
+```
+- Matches: `"C:\Program Files\App\uninstall.exe"` or `C:\path\to\file.exe`
+- Captures: Directory containing the executable
+
+**Version Subdirectory Detection:**
+```regex
+(^|[^a-z])(v?\d+\.?\d*|bin|app|x64|x86|win\d+)$
+```
+- Matches: `vim91`, `v1.2`, `bin`, `x64`, etc.
+- Action: Use parent directory instead of path itself
+
+**Confidence Scoring System:**
+- 150: Exact ARP subkey match (case-sensitive)
+- 145: Exact DisplayName match for ARP
+- 120-135: Normalized matches for ARP
+- 100-110: Full package ID matches
+- 80-95: Product/Publisher name matches
+- 70: Minimum threshold for accepting match
+- +5-10: Boost if install path contains package name
+
+**Files Modified:**
+- `ui/views/main_window.py` - All path detection improvements (15 commits)
+
+**Commits in this release:**
+1. Improve install path matching with multi-term search and registry subkey checking
+2. Improve ARP package matching to check DisplayName field
+3. Fix winget show for ARP packages and broaden registry search
+4. Add debug output to show sample registry entries when no match found
+5. Add WinGet show fallback for installation path detection
+6. Enhanced debug output to show registry entries without install paths
+7. Extract installation paths from UninstallString and InstallString
+8. Add debug output for UninstallString extraction failures
+9. Clean up debug code - UninstallString extraction working
+10. Fix path extraction to use smart parent/path selection
+
 ## [0.3.0] - 2025-12-26 21:20
 
 ### Added - Professional UI and Menu System
