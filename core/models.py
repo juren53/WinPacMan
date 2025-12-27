@@ -10,6 +10,9 @@ class PackageManager(Enum):
     CHOCOLATEY = "chocolatey"
     PIP = "pip"
     NPM = "npm"
+    SCOOP = "scoop"
+    MSSTORE = "msstore"
+    UNKNOWN = "unknown"  # For manually installed packages with unknown source
 
 
 class PackageStatus(Enum):
@@ -227,6 +230,12 @@ class UniversalPackageMetadata:
     # Cache metadata
     cache_timestamp: Optional[datetime] = None
     is_installed: bool = False
+
+    # Installed package metadata (from registry scan)
+    installed_version: Optional[str] = None
+    install_date: Optional[str] = None
+    install_source: Optional[str] = None  # "winget", "chocolatey", "scoop", "msstore", "unknown"
+    install_location: Optional[str] = None
 
     def to_package(self) -> Package:
         """Convert to standard Package object"""

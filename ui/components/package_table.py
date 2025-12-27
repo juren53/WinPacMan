@@ -35,7 +35,10 @@ class PackageTableWidget(QTableWidget):
         PackageManager.WINGET: QColor("#E8F5E8"),      # Light green
         PackageManager.CHOCOLATEY: QColor("#FFF4E6"),  # Light orange
         PackageManager.PIP: QColor("#E6F3FF"),         # Light blue
-        PackageManager.NPM: QColor("#FCE6F3")          # Light pink
+        PackageManager.NPM: QColor("#FCE6F3"),         # Light pink
+        PackageManager.SCOOP: QColor("#F0E6FF"),       # Light purple
+        PackageManager.MSSTORE: QColor("#E6FFFA"),     # Light cyan
+        PackageManager.UNKNOWN: QColor("#F5F5F5")      # Light gray
     }
     
     def __init__(self, parent=None):
@@ -112,8 +115,9 @@ class PackageTableWidget(QTableWidget):
             version_item = QTableWidgetItem(package.version)
             self.setItem(row, 1, version_item)
 
-            # Manager
-            manager_item = QTableWidgetItem(package.manager.value)
+            # Manager - capitalize and format nicely
+            manager_display = self._format_manager_name(package.manager.value)
+            manager_item = QTableWidgetItem(manager_display)
             self.setItem(row, 2, manager_item)
 
             # Description
@@ -129,6 +133,29 @@ class PackageTableWidget(QTableWidget):
         self.setSortingEnabled(True)
         print(f"[PackageTable] Sorting re-enabled, table should now display")
     
+    def _format_manager_name(self, manager_value: str) -> str:
+        """
+        Format package manager name for display.
+
+        Args:
+            manager_value: Raw manager value from enum (e.g., "winget", "unknown")
+
+        Returns:
+            Formatted display name (e.g., "WinGet", "Unknown")
+        """
+        # Special formatting for specific managers
+        formatting_map = {
+            'winget': 'WinGet',
+            'chocolatey': 'Chocolatey',
+            'pip': 'Pip',
+            'npm': 'NPM',
+            'scoop': 'Scoop',
+            'msstore': 'MS Store',
+            'unknown': 'Unknown'
+        }
+
+        return formatting_map.get(manager_value, manager_value.capitalize())
+
     def _apply_row_color(self, row: int, manager: PackageManager):
         """
         Apply manager-specific color to row.

@@ -2,6 +2,145 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2025-12-27
+
+### Major Performance Improvement - Registry-Based Installed Packages Discovery
+
+**Achievement:** Implemented Windows Registry scanning for installed package detection with **10-20x performance improvement** over shell command approach.
+
+**Performance Results:**
+- **Registry scan speed:** 1-2 seconds (vs 11-20 seconds for shell commands)
+- **Total packages found:** 143 packages (138 from registry + 5 from Scoop)
+- **Detection accuracy:** Fingerprint-based manager identification
+- **Speedup:** 10-20x faster installed package discovery
+
+### Added
+
+#### Registry-Based Package Discovery
+- **`metadata/providers/installed_registry_provider.py`** - Fast installed packages provider
+  - `InstalledRegistryProvider` class for Windows Registry scanning
+  - Scans three registry hives: HKLM, HKLM WOW6432Node, HKCU
+  - Extracts: DisplayName, DisplayVersion, InstallLocation, InstallSource, InstallDate, Publisher
+  - Fingerprint detection via `detect_manager()` method
+  - Performance: ~1-2 seconds for complete system scan
+
+#### Scoop-Specific Provider
+- **`ScoopInstalledProvider`** class in `installed_registry_provider.py`
+  - Scoop doesn't use Windows Registry (portable design)
+  - Scans `%USERPROFILE%\scoop\apps` directory structure
+  - Reads `manifest.json` for version and metadata
+  - Detects packages via `current` symlink
+
+#### Fingerprint Detection Strategy
+Detection rules (in priority order):
+1. **WinGet:** InstallSource contains "winget" or "appinstaller"
+2. **Chocolatey:** InstallLocation/InstallSource contains "chocolatey" or "choco"
+3. **Scoop:** InstallLocation contains "scoop"
+4. **MS Store:** InstallLocation contains "WindowsApps"
+5. **Unknown:** No fingerprint detected (per user requirement)
+
+#### Database Schema Extensions
+- **`metadata/metadata_cache.py`** - Extended for installed package tracking
+  - Added columns: `installed_version`, `install_date`, `install_source`, `install_location`
+  - `_migrate_schema()` method for backward compatibility
+  - Automatic schema upgrade for existing databases
+  - Index on `install_source` for performance
+
+#### Data Model Extensions
+- **`core/models.py`** - Extended PackageManager enum
+  - Added `SCOOP = "scoop"`
+  - Added `MSSTORE = "msstore"`
+  - Added `UNKNOWN = "unknown"` (for manually installed packages)
+  - Extended `UniversalPackageMetadata` with installed package fields
+
+#### Cache Service Methods
+- **`metadata/metadata_cache.py`** - New installed packages methods
+  - `sync_installed_packages_from_registry()` - Sync from registry scan
+  - `get_installed_packages()` - Query cached installed packages
+  - `_update_installed_state()` - Update cache with install state
+  - Filtering by manager and install source
+
+#### UI Integration
+- **`ui/views/main_window.py`** - Replaced shell command approach
+  - Refresh now calls `metadata_cache.sync_installed_packages_from_registry()`
+  - Displays results from cache query (instant)
+  - Shows progress during registry scan
+
+- **`ui/components/package_table.py`** - Display formatting
+  - `_format_manager_name()` for proper capitalization
+  - Manager column displays: "WinGet", "Chocolatey", "Scoop", "MS Store", "Unknown"
+  - Color scheme for new managers (SCOOP, MSSTORE, UNKNOWN)
+
+### Fixed
+
+#### Critical Database Enum Binding Bug
+- **Issue:** SQLite `ProgrammingError` when inserting packages
+  - Error: "type 'PackageManager' is not supported"
+  - PackageManager enum was passed directly to SQLite without conversion
+- **Solution:** Convert enum to string value before database operations
+  - Changed `pkg.manager` to `pkg.manager.value` (3 instances)
+  - Locations: SELECT query, UPDATE query, INSERT query in `_update_installed_state()`
+- **Impact:** Registry scan now completes successfully without database errors
+
+### Changed
+
+#### Installed Package Refresh Strategy
+- **Before:** Shell commands invoked for each package manager (slow)
+- **After:** Single registry scan + Scoop directory scan (fast)
+- **UI Behavior:** "Installed" mode now uses registry-based sync
+
+### Validated
+
+#### Registry Scan Test Results
+- ✅ **138 packages** discovered from Windows Registry
+- ✅ **5 packages** discovered from Scoop directory scan
+- ✅ **143 total packages** synced to database
+- ✅ **135 packages** displayed after manager filtering
+- ✅ **Manager detection working** - winget, chocolatey, scoop, msstore, unknown
+- ✅ **Database migration working** - Existing databases auto-upgraded
+- ✅ **No errors** - Clean execution with zero exceptions
+
+#### Performance Comparison
+
+| Method | Time | Packages | Status |
+|--------|------|----------|--------|
+| **Registry Scan (NEW)** | 1-2 seconds | 143 | ✅ 10-20x faster |
+| Shell Commands (OLD) | 11-20 seconds | varies | ❌ Deprecated |
+
+### Architecture Benefits
+
+- **Consistency:** Installed packages use same cache architecture as available packages
+- **Performance:** Sub-2 second scans vs 10-20 second shell commands
+- **Cross-Manager:** Single query aggregates all installed packages
+- **Offline:** View installed packages without package manager availability
+- **Unified Data:** Same `UniversalPackageMetadata` model for all packages
+
+### Technical Details
+
+**Files Created:**
+- `metadata/providers/installed_registry_provider.py` (287 lines)
+
+**Files Modified:**
+- `core/models.py` - Extended PackageManager enum, added installed package fields
+- `metadata/metadata_cache.py` - Schema migration, sync methods, enum fix
+- `ui/views/main_window.py` - Registry-based refresh integration
+- `ui/components/package_table.py` - Display formatting for new managers
+- `metadata/providers/__init__.py` - Export new providers
+
+**Registry Keys Scanned:**
+- `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`
+- `HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`
+- `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall`
+
+### Next Steps
+
+- Add WinGet `installed.db` validation for higher accuracy
+- Add Chocolatey `.chocolatey` folder validation
+- Implement update detection (compare installed_version vs version)
+- Add installation history tracking
+
+---
+
 ## [0.5.0-alpha] - 2025-12-27
 
 ### Major UX Improvement - Source Clarity (Installed vs Available Packages)

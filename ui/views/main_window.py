@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QMessageBox, QPushButton, QComboBox, QStatusBar, QApplication,
     QInputDialog, QDialog, QDialogButtonBox, QCheckBox, QTextEdit,
-    QMenuBar, QMenu, QLineEdit
+    QMenuBar, QMenu, QLineEdit, QTabWidget, QRadioButton, QButtonGroup
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont, QAction
@@ -62,6 +62,7 @@ class WinPacManMainWindow(QMainWindow):
         self.current_uninstall_worker: Optional[PackageUninstallWorker] = None
         self.selected_package: Optional[Package] = None
         self.verbose_mode = False  # Show detailed package manager output
+        self.current_source = 'available'  # 'installed' or 'available'
 
         # Animated spinner for progress indication
         self.spinner_frames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]
@@ -71,7 +72,7 @@ class WinPacManMainWindow(QMainWindow):
         self.progress_message = ""
 
         # Persistent status message (shows package count)
-        self.persistent_status = "Ready"
+        self.persistent_status = "Viewing: Available packages - All Packages"
 
         # Setup
         self.init_window()
@@ -96,6 +97,14 @@ class WinPacManMainWindow(QMainWindow):
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(10)
 
+        # Source toggle (Installed vs Available)
+        source_layout = self.create_source_toggle()
+        main_layout.addLayout(source_layout)
+
+        # Repository tabs
+        self.create_repository_tabs()
+        main_layout.addWidget(self.repo_tabs)
+
         # Control panel
         control_layout = self.create_control_panel()
         main_layout.addLayout(control_layout)
@@ -113,33 +122,109 @@ class WinPacManMainWindow(QMainWindow):
         # Status bar at bottom
         self.create_status_bar()
 
-    def create_control_panel(self) -> QHBoxLayout:
-        """Create control panel with manager selector and buttons."""
+    def create_source_toggle(self) -> QHBoxLayout:
+        """Create source toggle (Installed vs Available packages)."""
         layout = QHBoxLayout()
         layout.setSpacing(10)
 
         # Label
-        label = QLabel("Package Manager:")
-        layout.addWidget(label)
+        source_label = QLabel("Package Source:")
+        source_label.setStyleSheet("font-weight: bold; font-size: 10pt;")
+        layout.addWidget(source_label)
 
-        # Package manager selector
-        self.manager_combo = QComboBox()
-        self.manager_combo.addItems(["WinGet", "Chocolatey", "Pip", "NPM"])
-        self.manager_combo.setCurrentIndex(0)
-        self.manager_combo.setFixedWidth(150)
-        self.manager_combo.currentTextChanged.connect(self.on_manager_changed)
-        layout.addWidget(self.manager_combo)
+        # Radio buttons
+        self.installed_radio = QRadioButton("Installed")
+        self.installed_radio.setToolTip("View packages installed on your system")
 
-        # Spacer
+        self.available_radio = QRadioButton("Available")
+        self.available_radio.setToolTip("View packages available in remote repositories")
+        self.available_radio.setChecked(True)  # Default to Available
+
+        # Button group (ensures mutual exclusivity)
+        self.source_button_group = QButtonGroup()
+        self.source_button_group.addButton(self.installed_radio, 0)
+        self.source_button_group.addButton(self.available_radio, 1)
+
+        # Connect signals
+        self.installed_radio.toggled.connect(lambda checked: self.on_source_changed('installed') if checked else None)
+        self.available_radio.toggled.connect(lambda checked: self.on_source_changed('available') if checked else None)
+
+        layout.addWidget(self.installed_radio)
+        layout.addWidget(self.available_radio)
+
+        # Spacer to push toggle to left
         layout.addStretch()
+
+        return layout
+
+    def create_repository_tabs(self):
+        """Create repository filter tabs."""
+        self.repo_tabs = QTabWidget()
+        self.repo_tabs.setMaximumHeight(40)
+
+        # Define available repositories
+        # Future: Add more tabs as providers are implemented (Scoop, Pip, NPM, etc.)
+        self.tab_managers = {
+            'All Packages': None,  # None means all managers
+            'WinGet': ['winget'],
+            'Chocolatey': ['chocolatey'],
+            # 'Scoop': ['scoop'],  # Future
+            # 'Pip': ['pip'],  # Future
+            # 'NPM': ['npm'],  # Future
+        }
+
+        # Create tabs
+        for tab_name in self.tab_managers.keys():
+            # Create empty widget for each tab (we use one shared package table)
+            tab_widget = QWidget()
+            self.repo_tabs.addTab(tab_widget, tab_name)
+
+        # Connect tab change signal
+        self.repo_tabs.currentChanged.connect(self.on_tab_changed)
+
+        # Set default tab to "All Packages"
+        self.repo_tabs.setCurrentIndex(0)
+
+        # Update tab labels with package counts
+        self.update_tab_counts()
+
+    def update_tab_counts(self):
+        """Update tab labels with package counts from cache."""
+        try:
+            # Get counts for each manager
+            winget_count = self.metadata_cache.get_package_count('winget')
+            choco_count = self.metadata_cache.get_package_count('chocolatey')
+            total_count = winget_count + choco_count
+
+            # Update tab labels
+            for i in range(self.repo_tabs.count()):
+                tab_name = list(self.tab_managers.keys())[i]
+                if tab_name == 'All Packages':
+                    label = f"All Packages ({total_count:,})" if total_count > 0 else "All Packages"
+                elif tab_name == 'WinGet':
+                    label = f"WinGet ({winget_count:,})" if winget_count > 0 else "WinGet"
+                elif tab_name == 'Chocolatey':
+                    label = f"Chocolatey ({choco_count:,})" if choco_count > 0 else "Chocolatey"
+                else:
+                    label = tab_name
+
+                self.repo_tabs.setTabText(i, label)
+
+        except Exception as e:
+            print(f"[MainWindow] Error updating tab counts: {e}")
+
+    def create_control_panel(self) -> QHBoxLayout:
+        """Create control panel with search and action buttons."""
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
 
         # Search box
         search_label = QLabel("Search:")
         layout.addWidget(search_label)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search packages...")
-        self.search_input.setFixedWidth(200)
+        self.search_input.setPlaceholderText("Search packages in active tab...")
+        self.search_input.setFixedWidth(250)
         self.search_input.textChanged.connect(self.on_search_text_changed)
         self.search_input.returnPressed.connect(self.search_packages)
         layout.addWidget(self.search_input)
@@ -149,21 +234,6 @@ class WinPacManMainWindow(QMainWindow):
         self.search_btn.clicked.connect(self.search_packages)
         self.search_btn.setEnabled(False)  # Disabled until user types
         layout.addWidget(self.search_btn)
-
-        # Repository filter checkboxes
-        repo_label = QLabel("Repositories:")
-        repo_label.setStyleSheet("margin-left: 10px;")
-        layout.addWidget(repo_label)
-
-        self.winget_checkbox = QCheckBox("WinGet")
-        self.winget_checkbox.setChecked(True)
-        self.winget_checkbox.setToolTip("Include WinGet packages in search")
-        layout.addWidget(self.winget_checkbox)
-
-        self.chocolatey_checkbox = QCheckBox("Chocolatey")
-        self.chocolatey_checkbox.setChecked(True)
-        self.chocolatey_checkbox.setToolTip("Include Chocolatey packages in search")
-        layout.addWidget(self.chocolatey_checkbox)
 
         # Spacer
         layout.addStretch()
@@ -179,23 +249,17 @@ class WinPacManMainWindow(QMainWindow):
         self.refresh_btn.clicked.connect(self.refresh_packages)
         layout.addWidget(self.refresh_btn)
 
-        # Install button (placeholder for Phase 3)
+        # Install button
         self.install_btn = QPushButton("Install")
         self.install_btn.clicked.connect(self.install_package)
         self.install_btn.setEnabled(False)
         layout.addWidget(self.install_btn)
 
-        # Uninstall button (placeholder for Phase 3)
+        # Uninstall button
         self.uninstall_btn = QPushButton("Uninstall")
         self.uninstall_btn.clicked.connect(self.uninstall_package)
         self.uninstall_btn.setEnabled(False)
         layout.addWidget(self.uninstall_btn)
-
-        # Verbose mode checkbox
-        self.verbose_checkbox = QCheckBox("Verbose")
-        self.verbose_checkbox.setToolTip("Show detailed package manager output during operations")
-        self.verbose_checkbox.stateChanged.connect(self.on_verbose_toggled)
-        layout.addWidget(self.verbose_checkbox)
 
         # Spacer to push version to far right
         layout.addStretch()
@@ -214,34 +278,34 @@ class WinPacManMainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
 
         # Status label
-        self.status_label = QLabel("Ready")
+        self.status_label = QLabel(self.persistent_status)
         self.status_bar.addWidget(self.status_label)
 
     def create_menu_bar(self):
-        """Create menu bar with File, Edit, View, Config, and Help menus."""
+        """Create menu bar with File, Config, and Help menus."""
         menubar = self.menuBar()
 
         # File menu
         file_menu = menubar.addMenu("&File")
-        # Placeholder for future actions
         exit_action = QAction("E&xit", self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
-
-        # Edit menu
-        edit_menu = menubar.addMenu("&Edit")
-        # Placeholder for future actions
-
-        # View menu
-        view_menu = menubar.addMenu("&View")
-        # Placeholder for future actions
 
         # Config menu
         config_menu = menubar.addMenu("&Config")
         view_config_action = QAction("&View Configuration", self)
         view_config_action.triggered.connect(self.show_configuration)
         config_menu.addAction(view_config_action)
+
+        # View menu
+        view_menu = menubar.addMenu("&View")
+        self.verbose_action = QAction("&Verbose Output", self)
+        self.verbose_action.setCheckable(True)
+        self.verbose_action.setChecked(False)
+        self.verbose_action.setToolTip("Show detailed package manager output during operations")
+        self.verbose_action.triggered.connect(self.on_verbose_toggled)
+        view_menu.addAction(self.verbose_action)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -260,15 +324,16 @@ class WinPacManMainWindow(QMainWindow):
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
-    def get_selected_manager(self) -> PackageManager:
-        """Get currently selected package manager."""
-        manager_map = {
-            "WinGet": PackageManager.WINGET,
-            "Chocolatey": PackageManager.CHOCOLATEY,
-            "Pip": PackageManager.PIP,
-            "NPM": PackageManager.NPM
-        }
-        return manager_map[self.manager_combo.currentText()]
+    def get_active_tab_name(self) -> str:
+        """Get the name of the currently active tab (without count)."""
+        index = self.repo_tabs.currentIndex()
+        return list(self.tab_managers.keys())[index]
+
+    def get_active_managers(self) -> Optional[List[str]]:
+        """Get the list of managers for the active tab (None means all)."""
+        index = self.repo_tabs.currentIndex()
+        tab_name = list(self.tab_managers.keys())[index]
+        return self.tab_managers.get(tab_name)
 
     def _get_version_info(self) -> str:
         """Extract version and date from CHANGELOG.md for display."""
@@ -294,7 +359,7 @@ class WinPacManMainWindow(QMainWindow):
         return f"v{version} ({date_time})"
 
     def refresh_packages(self):
-        """Refresh package list using QThread worker."""
+        """Refresh package list using QThread worker for active tab."""
         print("[MainWindow] refresh_packages called")
         if self.operation_in_progress:
             print("[MainWindow] Operation already in progress, showing warning")
@@ -305,46 +370,105 @@ class WinPacManMainWindow(QMainWindow):
             )
             return
 
-        manager = self.get_selected_manager()
-        print(f"[MainWindow] Selected manager: {manager.value}")
+        # Check current source
+        source_label = "Installed" if self.current_source == 'installed' else "Available"
 
-        # Create and configure worker
-        print("[MainWindow] Creating PackageListWorker")
-        self.current_worker = PackageListWorker(
-            self.package_service,
-            manager
-        )
-
-        # Connect signals
-        print("[MainWindow] Connecting worker signals")
-        self.current_worker.signals.started.connect(
-            lambda: self.on_operation_started(
-                f"Refreshing packages from {manager.value}..."
+        # Available packages - inform user to use search instead
+        if self.current_source == 'available':
+            QMessageBox.information(
+                self,
+                "Refresh Available Packages",
+                "Available packages are loaded from the metadata cache.\n\n"
+                "Use the Search feature to find available packages.\n\n"
+                "To refresh the metadata cache, use Config → View Configuration."
             )
-        )
-        self.current_worker.signals.progress.connect(self.on_progress_update)
-        self.current_worker.signals.packages_loaded.connect(
-            self.on_packages_loaded
-        )
-        self.current_worker.signals.error_occurred.connect(self.on_error)
-        self.current_worker.signals.finished.connect(
-            self.on_operation_finished
-        )
+            return
 
-        # Start worker
-        print("[MainWindow] Starting worker thread")
-        self.current_worker.start()
+        # Installed packages - use registry-based sync
+        print("[MainWindow] Using registry-based sync for installed packages")
 
-    def on_manager_changed(self, text: str):
-        """Handle package manager selection change."""
+        # Show progress
+        self.status_label.setText("Scanning Windows Registry for installed packages...")
+        self.progress_label.setVisible(True)
+        self.progress_label.setText("⏳ Scanning registry...")
+        QApplication.processEvents()
+
+        try:
+            # Sync installed packages from registry (fast: 1-2 seconds)
+            self.metadata_cache.sync_installed_packages_from_registry(validate=True)
+
+            # Get installed packages from cache
+            tab_name = self.get_active_tab_name()
+            managers_filter = self.get_active_managers()
+
+            installed = self.metadata_cache.get_installed_packages(managers=managers_filter)
+
+            # Convert to Package objects and display
+            packages = [m.to_package() for m in installed]
+            self.package_table.set_packages(packages)
+
+            # Update status
+            package_word = "package" if len(packages) == 1 else "packages"
+            source_desc = tab_name if managers_filter else "All Packages"
+            self.persistent_status = f"{len(packages)} installed {package_word} loaded from {source_desc}"
+            self.status_label.setText(self.persistent_status)
+            self.progress_label.setVisible(False)
+
+            print(f"[MainWindow] Loaded {len(packages)} installed packages from registry")
+
+        except Exception as e:
+            print(f"[MainWindow] Error syncing installed packages: {e}")
+            import traceback
+            traceback.print_exc()
+
+            self.progress_label.setVisible(False)
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to load installed packages from registry:\n{str(e)}"
+            )
+
+    def on_source_changed(self, source: str):
+        """Handle package source change (Installed vs Available)."""
+        self.current_source = source
+        source_label = "Installed" if source == 'installed' else "Available"
+
+        # Clear current view
         self.package_table.clear_packages()
         self.progress_label.setVisible(False)
-        self.status_label.setText(f"Selected: {text}")
 
-        # Disable Install/Uninstall buttons when manager changes
+        # Update status message
+        tab_name = self.get_active_tab_name()
+        self.status_label.setText(f"Viewing: {source_label} packages - {tab_name}")
+
+        # Disable Install/Uninstall buttons when source changes
         self.selected_package = None
         self.install_btn.setEnabled(False)
         self.uninstall_btn.setEnabled(False)
+
+        # Update search placeholder
+        self.search_input.setPlaceholderText(f"Search {source_label.lower()} packages...")
+
+        print(f"[MainWindow] Source changed to: {source_label}")
+
+    def on_tab_changed(self, index: int):
+        """Handle repository tab change."""
+        tab_name = self.repo_tabs.tabText(index)
+
+        self.package_table.clear_packages()
+        self.progress_label.setVisible(False)
+
+        # Update status with current source
+        source_label = "Installed" if self.current_source == 'installed' else "Available"
+        self.status_label.setText(f"Viewing: {source_label} packages - {tab_name}")
+
+        # Disable Install/Uninstall buttons when tab changes
+        self.selected_package = None
+        self.install_btn.setEnabled(False)
+        self.uninstall_btn.setEnabled(False)
+
+        # Update search placeholder
+        self.search_input.setPlaceholderText(f"Search packages in {tab_name}...")
 
     def on_search_text_changed(self, text: str):
         """Handle search text changes - trigger search on Enter or button click only."""
@@ -352,34 +476,27 @@ class WinPacManMainWindow(QMainWindow):
         self.search_btn.setEnabled(len(text.strip()) > 0)
 
     def search_packages(self):
-        """Search packages using metadata cache."""
+        """Search packages (installed or available) in the active tab."""
         query = self.search_input.text().strip()
 
         if not query:
             QMessageBox.warning(self, "No Query", "Please enter a search term.")
             return
 
-        # Determine which repositories to search based on checkboxes
-        selected_managers = []
-        if self.winget_checkbox.isChecked():
-            selected_managers.append('winget')
-        if self.chocolatey_checkbox.isChecked():
-            selected_managers.append('chocolatey')
+        # Get managers from active tab
+        managers_filter = self.get_active_managers()
+        tab_name = self.get_active_tab_name()
+        source_label = "Installed" if self.current_source == 'installed' else "Available"
 
-        # Validate at least one repository is selected
-        if not selected_managers:
-            QMessageBox.warning(
-                self,
-                "No Repositories Selected",
-                "Please select at least one repository to search (WinGet or Chocolatey)."
-            )
+        print(f"[MainWindow] Searching for '{query}' in {source_label.lower()} packages ({tab_name})")
+
+        # Handle installed packages search
+        if self.current_source == 'installed':
+            self._search_installed_packages(query, managers_filter, tab_name)
             return
 
-        # Use None for cross-repo search (both selected), or specific list for single repo
-        managers_filter = None if len(selected_managers) == 2 else selected_managers
-
-        repo_text = "all repositories" if managers_filter is None else ", ".join(selected_managers)
-        print(f"[MainWindow] Searching for '{query}' in {repo_text}")
+        # Handle available packages search (metadata cache)
+        repo_text = tab_name.lower()
 
         try:
             # Check if cache needs refresh
@@ -434,6 +551,41 @@ class WinPacManMainWindow(QMainWindow):
                 f"An error occurred while searching: {str(e)}"
             )
 
+    def _search_installed_packages(self, query: str, managers_filter: Optional[List[str]], tab_name: str):
+        """Search within installed packages (filters locally, doesn't query package manager)."""
+        # If no packages are loaded, inform user to refresh first
+        if not self.current_packages:
+            QMessageBox.information(
+                self,
+                "No Packages Loaded",
+                "Please use the 'Refresh' button to load installed packages first."
+            )
+            return
+
+        # Filter packages by query (case-insensitive search in name, id, description)
+        query_lower = query.lower()
+        filtered = [
+            pkg for pkg in self.current_packages
+            if (query_lower in pkg.name.lower() or
+                query_lower in pkg.id.lower() or
+                (pkg.description and query_lower in pkg.description.lower()))
+        ]
+
+        if filtered:
+            self.package_table.set_packages(filtered)
+            self.persistent_status = f"Found {len(filtered)} installed packages matching '{query}' in {tab_name}"
+            self.status_label.setText(self.persistent_status)
+            print(f"[MainWindow] Found {len(filtered)} installed packages")
+        else:
+            self.package_table.clear_packages()
+            self.persistent_status = f"No installed packages found matching '{query}' in {tab_name}"
+            self.status_label.setText(self.persistent_status)
+            QMessageBox.information(
+                self,
+                "No Results",
+                f"No installed packages found matching '{query}' in {tab_name}."
+            )
+
     def refresh_metadata_cache(self):
         """Refresh the metadata cache from providers."""
         print("[MainWindow] Refreshing metadata cache...")
@@ -474,9 +626,9 @@ class WinPacManMainWindow(QMainWindow):
             self.install_btn.setEnabled(True)
             self.uninstall_btn.setEnabled(True)
 
-    def on_verbose_toggled(self, state):
-        """Handle verbose mode checkbox toggle."""
-        self.verbose_mode = (state == Qt.CheckState.Checked.value)
+    def on_verbose_toggled(self, checked: bool):
+        """Handle verbose mode menu toggle."""
+        self.verbose_mode = checked
         status = "enabled" if self.verbose_mode else "disabled"
         print(f"[MainWindow] Verbose mode {status}")
 
@@ -484,14 +636,20 @@ class WinPacManMainWindow(QMainWindow):
         """Install selected package or manual package ID (WinGet only)."""
         # 1. Handle manual package ID entry if no package selected
         if not self.selected_package:
-            # Check if WinGet is selected
-            current_manager = self.get_selected_manager()
-            if current_manager != PackageManager.WINGET:
+            # Check if WinGet tab is selected or All Packages tab
+            active_managers = self.get_active_managers()
+            # Allow manual entry only on WinGet tab or All Packages tab
+            is_winget_context = (
+                active_managers is None or  # All Packages
+                (active_managers and 'winget' in active_managers)  # WinGet tab
+            )
+
+            if not is_winget_context:
                 QMessageBox.warning(
                     self,
                     "No Package Selected",
                     "Please select a package from the list to install.\n\n"
-                    "Manual package ID entry is only available for WinGet."
+                    "Manual package ID entry is only available on the WinGet or All Packages tab."
                 )
                 return
 
@@ -665,7 +823,8 @@ class WinPacManMainWindow(QMainWindow):
 
         # Show package count in status bar (keep it visible)
         package_word = "package" if len(packages) == 1 else "packages"
-        self.persistent_status = f"{len(packages)} {package_word} loaded - Ready"
+        source_label = "Installed" if self.current_source == 'installed' else "Available"
+        self.persistent_status = f"{len(packages)} {source_label.lower()} {package_word} loaded - Ready"
         self.status_label.setText(self.persistent_status)
 
     @pyqtSlot(object)
@@ -1295,7 +1454,9 @@ class WinPacManMainWindow(QMainWindow):
 
     def disable_controls(self):
         """Disable controls during operation."""
-        self.manager_combo.setEnabled(False)
+        self.installed_radio.setEnabled(False)
+        self.available_radio.setEnabled(False)
+        self.repo_tabs.setEnabled(False)
         self.refresh_btn.setEnabled(False)
         self.search_btn.setEnabled(False)
         self.install_btn.setEnabled(False)
@@ -1303,14 +1464,17 @@ class WinPacManMainWindow(QMainWindow):
 
     def enable_controls(self):
         """Enable controls after operation."""
-        self.manager_combo.setEnabled(True)
+        self.installed_radio.setEnabled(True)
+        self.available_radio.setEnabled(True)
+        self.repo_tabs.setEnabled(True)
         self.refresh_btn.setEnabled(True)
 
-        # Always enable Install (supports manual WinGet package ID entry)
-        self.install_btn.setEnabled(True)
+        # Only enable search if there's text in the search box
+        self.search_btn.setEnabled(len(self.search_input.text().strip()) > 0)
 
-        # Only enable Uninstall if package is selected
+        # Only enable Install/Uninstall if package is selected
         if self.selected_package:
+            self.install_btn.setEnabled(True)
             self.uninstall_btn.setEnabled(True)
 
     def show_user_guide(self):

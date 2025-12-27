@@ -60,13 +60,21 @@ class MetadataCacheService:
             tags TEXT,
             cache_timestamp INTEGER,
             is_installed INTEGER DEFAULT 0,
+            installed_version TEXT,
+            install_date TEXT,
+            install_source TEXT,
+            install_location TEXT,
             UNIQUE(package_id, manager)
         )
         """)
 
+        # Migrate existing databases - add new columns if they don't exist
+        self._migrate_schema(cursor)
+
         # Create indexes for performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_manager ON packages(manager)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_installed ON packages(is_installed)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_install_source ON packages(install_source)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON packages(cache_timestamp)")
 
         # Create FTS5 virtual table for full-text search
@@ -108,6 +116,30 @@ class MetadataCacheService:
         conn.close()
 
         print(f"[MetadataCache] Initialized database: {self.cache_db_path}")
+
+    def _migrate_schema(self, cursor):
+        """
+        Migrate existing database schema to add new columns.
+
+        Handles upgrading existing databases that don't have the installed
+        package tracking columns.
+        """
+        # Get existing columns
+        cursor.execute("PRAGMA table_info(packages)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        # Add missing columns
+        new_columns = {
+            'installed_version': 'TEXT',
+            'install_date': 'TEXT',
+            'install_source': 'TEXT',
+            'install_location': 'TEXT'
+        }
+
+        for column_name, column_type in new_columns.items():
+            if column_name not in existing_columns:
+                print(f"[MetadataCache] Adding column: {column_name}")
+                cursor.execute(f"ALTER TABLE packages ADD COLUMN {column_name} {column_type}")
 
     def register_provider(self, provider: MetadataProvider):
         """
@@ -301,6 +333,145 @@ class MetadataCacheService:
             int(package.cache_timestamp.timestamp()) if package.cache_timestamp else None,
             1 if package.is_installed else 0
         ))
+
+        conn.commit()
+        conn.close()
+
+    def sync_installed_packages_from_registry(self, validate: bool = True):
+        """
+        Sync installed package state from Windows Registry.
+
+        Uses registry scanning for fast discovery (1-2 seconds) with optional
+        validation against package manager databases for accuracy.
+
+        Args:
+            validate: If True, cross-reference with manager-specific databases
+                     (Currently not implemented, reserved for future enhancement)
+        """
+        from metadata.providers.installed_registry_provider import (
+            InstalledRegistryProvider,
+            ScoopInstalledProvider
+        )
+
+        print("[MetadataCache] Syncing installed packages from registry...")
+
+        # Tier 1: Registry scan
+        registry_provider = InstalledRegistryProvider()
+        packages = registry_provider.scan_registry()
+
+        # Add Scoop packages (doesn't use registry)
+        scoop_provider = ScoopInstalledProvider()
+        packages.extend(scoop_provider.get_scoop_apps())
+
+        # TODO: Tier 2: Validation (future enhancement)
+        # if validate:
+        #     winget_validator = WinGetValidationProvider()
+        #     packages = winget_validator.validate(packages)
+        #
+        #     choco_validator = ChocolateyValidationProvider()
+        #     packages = choco_validator.validate(packages)
+
+        # Update cache with installed state
+        self._update_installed_state(packages)
+
+        print(f"[MetadataCache] Synced {len(packages)} installed packages")
+
+    def get_installed_packages(self, managers: Optional[List[str]] = None,
+                               source: Optional[str] = None) -> List[UniversalPackageMetadata]:
+        """
+        Get all installed packages, optionally filtered by manager or source.
+
+        Args:
+            managers: Filter by package manager repository (winget, chocolatey, etc.)
+                     None = all managers
+            source: Filter by install source (winget, chocolatey, manual, scoop, msstore)
+                   None = all sources
+
+        Returns:
+            List of UniversalPackageMetadata objects for installed packages
+        """
+        conn = sqlite3.connect(self.cache_db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        query = "SELECT * FROM packages WHERE is_installed = 1"
+        params = []
+
+        if managers:
+            placeholders = ','.join('?' * len(managers))
+            query += f" AND manager IN ({placeholders})"
+            params.extend(managers)
+
+        if source:
+            query += " AND install_source = ?"
+            params.append(source)
+
+        cursor.execute(query, params)
+        packages = [self._row_to_package(row) for row in cursor.fetchall()]
+
+        conn.close()
+        return packages
+
+    def _update_installed_state(self, packages: List):
+        """
+        Update cache with installed package state from registry scan.
+
+        Strategy:
+        - Clear all is_installed flags (all packages marked as not installed)
+        - Insert or update packages from registry scan
+        - Mark them as installed with install metadata
+
+        Args:
+            packages: List of PackageMetadata objects from registry scan
+        """
+        conn = sqlite3.connect(self.cache_db_path)
+        cursor = conn.cursor()
+
+        # Clear existing installed flags
+        cursor.execute("UPDATE packages SET is_installed = 0")
+        print("[MetadataCache] Cleared existing installed flags")
+
+        # Insert or update packages
+        for pkg in packages:
+            # Try to find existing package in cache by ID and manager
+            cursor.execute("""
+                SELECT id FROM packages
+                WHERE package_id = ? AND manager = ?
+            """, (pkg.package_id, pkg.manager.value))
+
+            existing = cursor.fetchone()
+
+            if existing:
+                # Update existing package with installed state
+                cursor.execute("""
+                    UPDATE packages SET
+                        is_installed = 1,
+                        installed_version = ?,
+                        install_date = ?,
+                        install_source = ?,
+                        install_location = ?
+                    WHERE package_id = ? AND manager = ?
+                """, (pkg.installed_version, pkg.install_date, pkg.install_source,
+                      pkg.install_location, pkg.package_id, pkg.manager.value))
+            else:
+                # Insert new package (not in available repos - manual install)
+                cursor.execute("""
+                    INSERT INTO packages (
+                        package_id, name, version, manager, description,
+                        author, publisher, homepage, license,
+                        extra_metadata, search_tokens, tags, cache_timestamp,
+                        is_installed, installed_version, install_date,
+                        install_source, install_location
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+                """, (
+                    pkg.package_id, pkg.name, pkg.version, pkg.manager.value,
+                    pkg.description or "", pkg.author or "", pkg.publisher or "",
+                    pkg.homepage or "", pkg.license or "", pkg.extra_metadata or "",
+                    pkg.search_tokens or "", ','.join(pkg.tags) if pkg.tags else "",
+                    int(datetime.now().timestamp()),
+                    pkg.installed_version, pkg.install_date,
+                    pkg.install_source, pkg.install_location
+                ))
 
         conn.commit()
         conn.close()
