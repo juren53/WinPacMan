@@ -8,7 +8,7 @@ with modern styling.
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QMessageBox, QPushButton, QComboBox, QStatusBar, QApplication,
-    QInputDialog, QDialog, QDialogButtonBox
+    QInputDialog, QDialog, QDialogButtonBox, QCheckBox, QTextEdit
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont
@@ -50,6 +50,14 @@ class WinPacManMainWindow(QMainWindow):
         self.current_install_worker: Optional[PackageInstallWorker] = None
         self.current_uninstall_worker: Optional[PackageUninstallWorker] = None
         self.selected_package: Optional[Package] = None
+        self.verbose_mode = False  # Show detailed package manager output
+
+        # Animated spinner for progress indication
+        self.spinner_frames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]
+        self.spinner_index = 0
+        self.spinner_timer = QTimer()
+        self.spinner_timer.timeout.connect(self._update_spinner)
+        self.progress_message = ""
 
         # Setup
         self.init_window()
@@ -136,6 +144,12 @@ class WinPacManMainWindow(QMainWindow):
         self.uninstall_btn.clicked.connect(self.uninstall_package)
         self.uninstall_btn.setEnabled(False)
         layout.addWidget(self.uninstall_btn)
+
+        # Verbose mode checkbox
+        self.verbose_checkbox = QCheckBox("Verbose")
+        self.verbose_checkbox.setToolTip("Show detailed package manager output during operations")
+        self.verbose_checkbox.stateChanged.connect(self.on_verbose_toggled)
+        layout.addWidget(self.verbose_checkbox)
 
         return layout
 
@@ -228,6 +242,12 @@ class WinPacManMainWindow(QMainWindow):
         if not self.operation_in_progress:
             self.install_btn.setEnabled(True)
             self.uninstall_btn.setEnabled(True)
+
+    def on_verbose_toggled(self, state):
+        """Handle verbose mode checkbox toggle."""
+        self.verbose_mode = (state == Qt.CheckState.Checked.value)
+        status = "enabled" if self.verbose_mode else "disabled"
+        print(f"[MainWindow] Verbose mode {status}")
 
     def install_package(self):
         """Install selected package or manual package ID (WinGet only)."""
@@ -372,6 +392,12 @@ class WinPacManMainWindow(QMainWindow):
         # 6. Start worker
         self.current_uninstall_worker.start()
 
+    def _update_spinner(self):
+        """Update animated spinner (called by timer)."""
+        self.spinner_index = (self.spinner_index + 1) % len(self.spinner_frames)
+        spinner = self.spinner_frames[self.spinner_index]
+        self.progress_label.setText(f"{spinner} {self.progress_message}")
+
     @pyqtSlot(str)
     def on_operation_started(self, message: str):
         """Handle operation start."""
@@ -380,19 +406,19 @@ class WinPacManMainWindow(QMainWindow):
         self.disable_controls()
         self.status_label.setText(message)
         self.progress_label.setVisible(True)
-        self.progress_label.setText("Starting...")
+
+        # Start animated spinner
+        self.progress_message = "Starting..."
+        self.spinner_index = 0
+        self.spinner_timer.start(100)  # Update every 100ms
 
     @pyqtSlot(int, int, str)
     def on_progress_update(self, current: int, total: int, message: str):
         """Handle progress update (thread-safe via signal)."""
-        if total > 0:
-            percentage = int((current / total) * 100)
-            print(f"[MainWindow] on_progress_update: {current}/{total} - {message} ({percentage}%)")
-            self.progress_label.setText(f"{percentage}% - {message}")
-        else:
-            print(f"[MainWindow] on_progress_update: {message}")
-            self.progress_label.setText(message)
+        print(f"[MainWindow] on_progress_update: {current}/{total} - {message}")
 
+        # Update progress message (spinner updates automatically via timer)
+        self.progress_message = message
         self.status_label.setText(message)
 
         # Force UI to update immediately
@@ -418,6 +444,10 @@ class WinPacManMainWindow(QMainWindow):
         # Log the operation
         self._log_operation(result)
 
+        # Show verbose output if enabled
+        if self.verbose_mode:
+            self._show_verbose_output(result)
+
         if result.success:
             QMessageBox.information(
                 self,
@@ -438,6 +468,10 @@ class WinPacManMainWindow(QMainWindow):
         """Handle uninstallation completion."""
         # Log the operation
         self._log_operation(result)
+
+        # Show verbose output if enabled
+        if self.verbose_mode:
+            self._show_verbose_output(result)
 
         if result.success:
             QMessageBox.information(
@@ -470,6 +504,9 @@ class WinPacManMainWindow(QMainWindow):
         print("[MainWindow] on_operation_finished")
         self.operation_in_progress = False
         self.enable_controls()
+
+        # Stop animated spinner
+        self.spinner_timer.stop()
         self.progress_label.setVisible(False)
         self.progress_label.setText("")
 
@@ -618,6 +655,69 @@ class WinPacManMainWindow(QMainWindow):
         # Show brief feedback
         self.status_label.setText(f"Copied to clipboard: {text}")
         QTimer.singleShot(3000, lambda: self.status_label.setText("Ready"))
+
+    def _show_verbose_output(self, result):
+        """
+        Show detailed package manager output in a dialog.
+
+        Displays stdout, stderr, and exit code from package manager operations.
+        Useful for debugging installation/uninstallation issues.
+        """
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Verbose Output - {result.operation.title()} {result.package}")
+        dialog.setMinimumWidth(700)
+        dialog.setMinimumHeight(500)
+
+        layout = QVBoxLayout(dialog)
+
+        # Header with operation info
+        header_text = (
+            f"<b>Operation:</b> {result.operation}<br>"
+            f"<b>Package:</b> {result.package}<br>"
+            f"<b>Success:</b> {'✓ Yes' if result.success else '✗ No'}<br>"
+            f"<b>Exit Code:</b> {result.details.get('exit_code', 'N/A')}"
+        )
+        header_label = QLabel(header_text)
+        layout.addWidget(header_label)
+
+        # Stdout section
+        stdout_text = result.details.get('stdout', '').strip()
+        if stdout_text:
+            layout.addSpacing(10)
+            stdout_label = QLabel("<b>Standard Output (stdout):</b>")
+            layout.addWidget(stdout_label)
+
+            stdout_display = QTextEdit()
+            stdout_display.setReadOnly(True)
+            stdout_display.setPlainText(stdout_text)
+            stdout_display.setStyleSheet("font-family: 'Consolas', 'Courier New', monospace;")
+            layout.addWidget(stdout_display)
+
+        # Stderr section
+        stderr_text = result.details.get('stderr', '').strip()
+        if stderr_text:
+            layout.addSpacing(10)
+            stderr_label = QLabel("<b>Standard Error (stderr):</b>")
+            layout.addWidget(stderr_label)
+
+            stderr_display = QTextEdit()
+            stderr_display.setReadOnly(True)
+            stderr_display.setPlainText(stderr_text)
+            stderr_display.setStyleSheet("font-family: 'Consolas', 'Courier New', monospace; color: #d32f2f;")
+            layout.addWidget(stderr_display)
+
+        # If no output, show message
+        if not stdout_text and not stderr_text:
+            no_output_label = QLabel("<i>No output captured from package manager.</i>")
+            layout.addWidget(no_output_label)
+
+        # Close button
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+
+        dialog.exec()
 
     def _log_operation(self, result):
         """Log operation to history file."""
