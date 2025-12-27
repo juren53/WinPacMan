@@ -7,7 +7,7 @@ with modern styling.
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QMessageBox, QPushButton, QComboBox, QProgressBar, QStatusBar
+    QMessageBox, QPushButton, QComboBox, QStatusBar, QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont
@@ -16,7 +16,11 @@ from typing import List, Optional
 from core.models import PackageManager, Package
 from services.package_service import PackageManagerService
 from services.settings_service import SettingsService
-from ui.workers.package_worker import PackageListWorker
+from ui.workers.package_worker import (
+    PackageListWorker,
+    PackageInstallWorker,
+    PackageUninstallWorker
+)
 from ui.components.package_table import PackageTableWidget
 
 
@@ -42,6 +46,9 @@ class WinPacManMainWindow(QMainWindow):
         self.current_packages: List[Package] = []
         self.operation_in_progress = False
         self.current_worker: Optional[PackageListWorker] = None
+        self.current_install_worker: Optional[PackageInstallWorker] = None
+        self.current_uninstall_worker: Optional[PackageUninstallWorker] = None
+        self.selected_package: Optional[Package] = None
 
         # Setup
         self.init_window()
@@ -72,6 +79,9 @@ class WinPacManMainWindow(QMainWindow):
         self.package_table.package_double_clicked.connect(
             self.on_package_details
         )
+        self.package_table.package_selected.connect(
+            self.on_package_selected
+        )
         main_layout.addWidget(self.package_table)
 
         # Status bar at bottom
@@ -96,6 +106,12 @@ class WinPacManMainWindow(QMainWindow):
 
         # Spacer
         layout.addStretch()
+
+        # Progress label (shows loading status)
+        self.progress_label = QLabel("")
+        self.progress_label.setVisible(False)
+        self.progress_label.setStyleSheet("color: #0078d4; font-weight: bold;")
+        layout.addWidget(self.progress_label)
 
         # Refresh button
         self.refresh_btn = QPushButton("Refresh")
@@ -123,19 +139,13 @@ class WinPacManMainWindow(QMainWindow):
         return layout
 
     def create_status_bar(self):
-        """Create status bar with progress indicator."""
+        """Create status bar."""
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
         # Status label
         self.status_label = QLabel("Ready")
         self.status_bar.addWidget(self.status_label)
-
-        # Progress bar (on right side)
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setFixedWidth(200)
-        self.status_bar.addPermanentWidget(self.progress_bar)
 
     def get_selected_manager(self) -> PackageManager:
         """Get currently selected package manager."""
@@ -192,7 +202,13 @@ class WinPacManMainWindow(QMainWindow):
     def on_manager_changed(self, text: str):
         """Handle package manager selection change."""
         self.package_table.clear_packages()
+        self.progress_label.setVisible(False)
         self.status_label.setText(f"Selected: {text}")
+
+        # Disable Install/Uninstall buttons when manager changes
+        self.selected_package = None
+        self.install_btn.setEnabled(False)
+        self.uninstall_btn.setEnabled(False)
 
     def search_packages(self):
         """Search packages (placeholder for Phase 4)."""
@@ -202,21 +218,128 @@ class WinPacManMainWindow(QMainWindow):
             "Search functionality will be implemented in Phase 4."
         )
 
+    @pyqtSlot(Package)
+    def on_package_selected(self, package: Package):
+        """Handle package selection change - enable/disable buttons."""
+        self.selected_package = package
+
+        # Enable buttons only if no operation is in progress
+        if not self.operation_in_progress:
+            self.install_btn.setEnabled(True)
+            self.uninstall_btn.setEnabled(True)
+
     def install_package(self):
-        """Install package (placeholder for Phase 3)."""
-        QMessageBox.information(
+        """Install selected package."""
+        # 1. Validate selection exists
+        if not self.selected_package:
+            QMessageBox.warning(
+                self,
+                "No Package Selected",
+                "Please select a package to install."
+            )
+            return
+
+        # 2. Show confirmation dialog
+        reply = QMessageBox.question(
             self,
-            "Coming Soon",
-            "Install functionality will be implemented in Phase 3."
+            "Confirm Installation",
+            f"Install {self.selected_package.name} ({self.selected_package.version})?\n\n"
+            f"Package Manager: {self.selected_package.manager.value}\n"
+            f"This operation may take several minutes.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # 3. Check no operation in progress
+        if self.operation_in_progress:
+            QMessageBox.warning(
+                self,
+                "Operation In Progress",
+                "Please wait for the current operation to complete."
+            )
+            return
+
+        # 4. Create worker
+        self.current_install_worker = PackageInstallWorker(
+            self.package_service,
+            self.selected_package.manager,
+            self.selected_package.id
         )
 
-    def uninstall_package(self):
-        """Uninstall package (placeholder for Phase 3)."""
-        QMessageBox.information(
-            self,
-            "Coming Soon",
-            "Uninstall functionality will be implemented in Phase 3."
+        # 5. Connect signals
+        self.current_install_worker.signals.started.connect(
+            lambda: self.on_operation_started(f"Installing {self.selected_package.name}...")
         )
+        self.current_install_worker.signals.progress.connect(self.on_progress_update)
+        self.current_install_worker.signals.operation_complete.connect(
+            self.on_install_complete
+        )
+        self.current_install_worker.signals.error_occurred.connect(self.on_error)
+        self.current_install_worker.signals.finished.connect(
+            self.on_operation_finished
+        )
+
+        # 6. Start worker
+        self.current_install_worker.start()
+
+    def uninstall_package(self):
+        """Uninstall selected package."""
+        # 1. Validate selection exists
+        if not self.selected_package:
+            QMessageBox.warning(
+                self,
+                "No Package Selected",
+                "Please select a package to uninstall."
+            )
+            return
+
+        # 2. Show confirmation dialog (stronger warning)
+        reply = QMessageBox.warning(
+            self,
+            "Confirm Uninstallation",
+            f"Uninstall {self.selected_package.name} ({self.selected_package.version})?\n\n"
+            f"Package Manager: {self.selected_package.manager.value}\n\n"
+            f"WARNING: This action cannot be undone.\n"
+            f"Make sure you don't need this package before proceeding.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # 3. Check no operation in progress
+        if self.operation_in_progress:
+            QMessageBox.warning(
+                self,
+                "Operation In Progress",
+                "Please wait for the current operation to complete."
+            )
+            return
+
+        # 4. Create worker
+        self.current_uninstall_worker = PackageUninstallWorker(
+            self.package_service,
+            self.selected_package.manager,
+            self.selected_package.id
+        )
+
+        # 5. Connect signals
+        self.current_uninstall_worker.signals.started.connect(
+            lambda: self.on_operation_started(f"Uninstalling {self.selected_package.name}...")
+        )
+        self.current_uninstall_worker.signals.progress.connect(self.on_progress_update)
+        self.current_uninstall_worker.signals.operation_complete.connect(
+            self.on_uninstall_complete
+        )
+        self.current_uninstall_worker.signals.error_occurred.connect(self.on_error)
+        self.current_uninstall_worker.signals.finished.connect(
+            self.on_operation_finished
+        )
+
+        # 6. Start worker
+        self.current_uninstall_worker.start()
 
     @pyqtSlot(str)
     def on_operation_started(self, message: str):
@@ -225,18 +348,24 @@ class WinPacManMainWindow(QMainWindow):
         self.operation_in_progress = True
         self.disable_controls()
         self.status_label.setText(message)
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
+        self.progress_label.setVisible(True)
+        self.progress_label.setText("Starting...")
 
     @pyqtSlot(int, int, str)
     def on_progress_update(self, current: int, total: int, message: str):
         """Handle progress update (thread-safe via signal)."""
-        print(f"[MainWindow] on_progress_update: {current}/{total} - {message}")
         if total > 0:
             percentage = int((current / total) * 100)
-            self.progress_bar.setValue(percentage)
+            print(f"[MainWindow] on_progress_update: {current}/{total} - {message} ({percentage}%)")
+            self.progress_label.setText(f"{percentage}% - {message}")
+        else:
+            print(f"[MainWindow] on_progress_update: {message}")
+            self.progress_label.setText(message)
 
         self.status_label.setText(message)
+
+        # Force UI to update immediately
+        QApplication.processEvents()
 
     @pyqtSlot(list)
     def on_packages_loaded(self, packages: List[Package]):
@@ -251,6 +380,48 @@ class WinPacManMainWindow(QMainWindow):
 
         # Auto-clear success message after 3 seconds
         QTimer.singleShot(3000, lambda: self.status_label.setText("Ready"))
+
+    @pyqtSlot(object)
+    def on_install_complete(self, result):
+        """Handle installation completion."""
+        # Log the operation
+        self._log_operation(result)
+
+        if result.success:
+            QMessageBox.information(
+                self,
+                "Installation Successful",
+                result.message
+            )
+            # Auto-refresh to show newly installed package
+            self.refresh_packages()
+        else:
+            QMessageBox.critical(
+                self,
+                "Installation Failed",
+                result.message
+            )
+
+    @pyqtSlot(object)
+    def on_uninstall_complete(self, result):
+        """Handle uninstallation completion."""
+        # Log the operation
+        self._log_operation(result)
+
+        if result.success:
+            QMessageBox.information(
+                self,
+                "Uninstallation Successful",
+                result.message
+            )
+            # Auto-refresh to remove uninstalled package
+            self.refresh_packages()
+        else:
+            QMessageBox.critical(
+                self,
+                "Uninstallation Failed",
+                result.message
+            )
 
     @pyqtSlot(str)
     def on_error(self, error_message: str):
@@ -268,13 +439,26 @@ class WinPacManMainWindow(QMainWindow):
         print("[MainWindow] on_operation_finished")
         self.operation_in_progress = False
         self.enable_controls()
-        self.progress_bar.setVisible(False)
+        self.progress_label.setVisible(False)
+        self.progress_label.setText("")
 
         # Clean up worker
         if self.current_worker:
             self.current_worker.wait()
             self.current_worker.deleteLater()
             self.current_worker = None
+
+        # Clean up install worker
+        if self.current_install_worker:
+            self.current_install_worker.wait()
+            self.current_install_worker.deleteLater()
+            self.current_install_worker = None
+
+        # Clean up uninstall worker
+        if self.current_uninstall_worker:
+            self.current_uninstall_worker.wait()
+            self.current_uninstall_worker.deleteLater()
+            self.current_uninstall_worker = None
 
     def on_package_details(self, package: Package):
         """Show package details dialog."""
@@ -286,6 +470,35 @@ class WinPacManMainWindow(QMainWindow):
             f"Manager: {package.manager.value}\n"
             f"Description: {package.description or 'N/A'}"
         )
+
+    def _log_operation(self, result):
+        """Log operation to history file."""
+        from core.config import config_manager
+        import json
+
+        log_file = config_manager.get_data_file_path("operation_history.json")
+
+        # Load existing history
+        history = []
+        if log_file.exists():
+            try:
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    history = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                history = []
+
+        # Add new entry
+        history.append(result.to_dict())
+
+        # Keep only last 100 operations
+        history = history[-100:]
+
+        # Save back
+        try:
+            with open(log_file, 'w', encoding='utf-8') as f:
+                json.dump(history, f, indent=2, ensure_ascii=False)
+        except IOError as e:
+            print(f"Failed to log operation: {e}")
 
     def disable_controls(self):
         """Disable controls during operation."""
@@ -299,6 +512,11 @@ class WinPacManMainWindow(QMainWindow):
         """Enable controls after operation."""
         self.manager_combo.setEnabled(True)
         self.refresh_btn.setEnabled(True)
+
+        # Only enable Install/Uninstall if package is selected
+        if self.selected_package:
+            self.install_btn.setEnabled(True)
+            self.uninstall_btn.setEnabled(True)
 
     def apply_theme(self):
         """Apply theme from settings."""

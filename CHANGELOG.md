@@ -2,6 +2,123 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.0.1d] - 2025-12-26
+
+### Added - Phase 3: Install/Uninstall Functionality
+
+- **Install/Uninstall Implementation** (`ui/views/main_window.py`):
+  - `install_package()` method: Full worker-based implementation with confirmation dialog
+  - `uninstall_package()` method: Full worker-based implementation with warning dialog
+  - Package selection enables/disables Install/Uninstall buttons
+  - Confirmation dialogs before operations (Yes/No with default to No)
+  - Warning dialog for uninstall with "cannot be undone" message
+  - Non-blocking operations via PackageInstallWorker and PackageUninstallWorker
+  - Auto-refresh package list after successful operations
+  - Success/failure dialogs with detailed messages
+
+- **Worker State Management**:
+  - `current_install_worker` and `current_uninstall_worker` tracking
+  - `selected_package` state variable for button enable/disable logic
+  - Proper worker cleanup with `.wait()` and `.deleteLater()`
+  - Multiple worker types cleaned up in `on_operation_finished()`
+
+- **Signal Handlers** (`ui/views/main_window.py`):
+  - `on_package_selected()`: Enables Install/Uninstall buttons when package selected
+  - `on_install_complete()`: Handles installation completion, shows dialog, auto-refreshes
+  - `on_uninstall_complete()`: Handles uninstallation completion, shows dialog, auto-refreshes
+  - Both handlers log operations to history file
+
+- **Operation History Logging**:
+  - `_log_operation()` helper method writes to `operation_history.json`
+  - Logs stored in XDG data directory: `%APPDATA%\Local\winpacman\operation_history.json`
+  - JSON format with operation type, package, success status, message, timestamp
+  - Circular buffer keeps last 100 operations
+  - Handles I/O errors gracefully (prints to console, doesn't crash)
+
+- **Button State Logic**:
+  - Install/Uninstall buttons disabled by default
+  - Enabled when package selected (via `package_selected` signal)
+  - Disabled when package manager dropdown changes
+  - Disabled during any operation (install/uninstall/refresh)
+  - Conditionally re-enabled after operation based on selection state
+
+### Fixed
+
+- **Error Message Handling** (`services/package_service.py`):
+  - Improved error messages for install/uninstall failures
+  - Checks both `stderr` and `stdout` for error output
+  - Falls back to showing exit code if both streams are empty
+  - Previously showed empty error messages when stderr was blank
+  - Now provides detailed permission errors and failure reasons
+
+### Changed
+
+- **enable_controls() Method**: Conditionally enables Install/Uninstall buttons
+  - Only enables if package is selected
+  - Previously didn't manage Install/Uninstall button states
+
+- **on_manager_changed() Method**: Clears selection and disables buttons
+  - Resets `selected_package` to None
+  - Disables Install/Uninstall buttons when switching managers
+  - Previously only cleared table and status label
+
+### Testing Phase 3
+
+**Test Cases Verified:**
+1. ✅ **Pip Install/Uninstall**: Cowsay installed and uninstalled successfully (no admin required)
+2. ✅ **Chocolatey Install**: fzf installed successfully with auto-refresh
+3. ✅ **Chocolatey Uninstall (no admin)**: Permission error displayed correctly, package not removed
+4. ✅ **Chocolatey Uninstall (as admin)**: fzf uninstalled successfully with auto-refresh
+5. ✅ **Button States**: Enabled/disabled correctly based on selection and operation status
+6. ✅ **Confirmation Dialogs**: Displayed before install/uninstall operations
+7. ✅ **Error Handling**: Detailed permission errors shown with full context
+8. ✅ **Operation History**: Logged to JSON file successfully
+
+```powershell
+# Test Install/Uninstall (Pip - no admin required)
+.\winpacman_env_windows\Scripts\Activate.ps1
+python gui_pyqt6.py
+# 1. Select "Pip" → Click Refresh
+# 2. Install a test package via command line: pip install cowsay
+# 3. Refresh Pip list, select cowsay
+# 4. Click Uninstall → Confirm → Verify success dialog and auto-refresh
+
+# Test Install/Uninstall (Chocolatey - requires admin)
+# Run PowerShell as Administrator
+cd C:\Users\jimur\Projects\WinPacMan
+.\winpacman_env_windows\Scripts\Activate.ps1
+python gui_pyqt6.py
+# 1. Select "Chocolatey" → Click Refresh
+# 2. Select a package → Click Install → Confirm
+# 3. Verify success dialog and auto-refresh
+# 4. Click Uninstall → Confirm warning → Verify success
+
+# Check operation history
+# View: %APPDATA%\Local\winpacman\operation_history.json
+```
+
+### Notes
+
+- **Beta Release**: Phase 3 complete with install/uninstall functionality
+- **Permission Handling**: Chocolatey requires admin rights for install/uninstall
+  - Clear error messages guide users to run as administrator
+  - Pip and WinGet typically work without admin for user-level packages
+- **Auto-Refresh**: Package list automatically refreshes after successful operations
+  - Failed operations do not trigger auto-refresh (preserves current view)
+- **Operation History**: All install/uninstall attempts logged to JSON file
+  - Success and failure both recorded with full details
+  - Useful for debugging and auditing
+- **Next Phase**: Phase 4 will implement search functionality
+
+**Key Files Modified:**
+- `ui/views/main_window.py`: Install/uninstall implementation, signal handlers, state management
+- `services/package_service.py`: Improved error message handling
+
+**Tag:**
+- `v0.0.1d`: Beta release with Phase 3 complete
+
+---
+
 ## [0.0.1c] - 2025-12-26
 
 ### Added - Phase 2: PyQt6 UI with Package Listing

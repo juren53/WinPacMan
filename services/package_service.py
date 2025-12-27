@@ -282,8 +282,14 @@ class PackageManagerService:
             )
             
             success = result.returncode == 0
-            message = f"Successfully installed {package_id}" if success else f"Failed to install {package_id}: {result.stderr}"
-            
+
+            if success:
+                message = f"Successfully installed {package_id}"
+            else:
+                # Try to get error from stderr, then stdout, then show exit code
+                error_msg = result.stderr.strip() or result.stdout.strip() or f"Exit code {result.returncode}"
+                message = f"Failed to install {package_id}: {error_msg}"
+
             if progress_callback:
                 progress_callback(100, 100, message)
             
@@ -325,8 +331,14 @@ class PackageManagerService:
             )
             
             success = result.returncode == 0
-            message = f"Successfully uninstalled {package_id}" if success else f"Failed to uninstall {package_id}: {result.stderr}"
-            
+
+            if success:
+                message = f"Successfully uninstalled {package_id}"
+            else:
+                # Try to get error from stderr, then stdout, then show exit code
+                error_msg = result.stderr.strip() or result.stdout.strip() or f"Exit code {result.returncode}"
+                message = f"Failed to uninstall {package_id}: {error_msg}"
+
             if progress_callback:
                 progress_callback(100, 100, message)
             
