@@ -218,12 +218,14 @@ class PackageManagerService:
         try:
             if progress_callback:
                 progress_callback(0, 100, "Getting package list from NPM...")
-            
+
+            # On Windows, npm is npm.cmd and requires shell=True
             result = subprocess.run(
-                ['npm', 'list', '-g', '--json', '--depth=0'], 
-                capture_output=True, 
-                text=True, 
-                timeout=60
+                ['npm', 'list', '-g', '--json', '--depth=0'],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                shell=True
             )
             
             if progress_callback:
@@ -273,12 +275,16 @@ class PackageManagerService:
             
             if progress_callback:
                 progress_callback(0, 100, f"Installing {package_id}...")
-            
+
+            # On Windows, npm requires shell=True
+            use_shell = (manager == PackageManager.NPM)
+
             result = subprocess.run(
                 commands[manager],
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minutes timeout
+                timeout=300,  # 5 minutes timeout
+                shell=use_shell
             )
             
             success = result.returncode == 0
@@ -322,12 +328,16 @@ class PackageManagerService:
             
             if progress_callback:
                 progress_callback(0, 100, f"Uninstalling {package_id}...")
-            
+
+            # On Windows, npm requires shell=True
+            use_shell = (manager == PackageManager.NPM)
+
             result = subprocess.run(
                 commands[manager],
                 capture_output=True,
                 text=True,
-                timeout=180  # 3 minutes timeout
+                timeout=180,  # 3 minutes timeout
+                shell=use_shell
             )
             
             success = result.returncode == 0

@@ -8,10 +8,11 @@ with modern styling.
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QMessageBox, QPushButton, QComboBox, QStatusBar, QApplication,
-    QInputDialog, QDialog, QDialogButtonBox, QCheckBox, QTextEdit
+    QInputDialog, QDialog, QDialogButtonBox, QCheckBox, QTextEdit,
+    QMenuBar, QMenu
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QAction
 from typing import List, Optional
 
 from core.models import PackageManager, Package, PackageStatus
@@ -59,6 +60,9 @@ class WinPacManMainWindow(QMainWindow):
         self.spinner_timer.timeout.connect(self._update_spinner)
         self.progress_message = ""
 
+        # Persistent status message (shows package count)
+        self.persistent_status = "Ready"
+
         # Setup
         self.init_window()
         self.init_ui()
@@ -71,6 +75,9 @@ class WinPacManMainWindow(QMainWindow):
 
     def init_ui(self):
         """Setup user interface."""
+        # Create menu bar
+        self.create_menu_bar()
+
         # Create main widget and layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -151,6 +158,15 @@ class WinPacManMainWindow(QMainWindow):
         self.verbose_checkbox.stateChanged.connect(self.on_verbose_toggled)
         layout.addWidget(self.verbose_checkbox)
 
+        # Spacer to push version to far right
+        layout.addStretch()
+
+        # Version label in upper right corner
+        version_text = self._get_version_info()
+        self.version_label = QLabel(version_text)
+        self.version_label.setStyleSheet("color: #808080; font-size: 9pt;")  # Subdued gray color
+        layout.addWidget(self.version_label)
+
         return layout
 
     def create_status_bar(self):
@@ -162,6 +178,49 @@ class WinPacManMainWindow(QMainWindow):
         self.status_label = QLabel("Ready")
         self.status_bar.addWidget(self.status_label)
 
+    def create_menu_bar(self):
+        """Create menu bar with File, Edit, View, Config, and Help menus."""
+        menubar = self.menuBar()
+
+        # File menu
+        file_menu = menubar.addMenu("&File")
+        # Placeholder for future actions
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        # Edit menu
+        edit_menu = menubar.addMenu("&Edit")
+        # Placeholder for future actions
+
+        # View menu
+        view_menu = menubar.addMenu("&View")
+        # Placeholder for future actions
+
+        # Config menu
+        config_menu = menubar.addMenu("&Config")
+        view_config_action = QAction("&View Configuration", self)
+        view_config_action.triggered.connect(self.show_configuration)
+        config_menu.addAction(view_config_action)
+
+        # Help menu
+        help_menu = menubar.addMenu("&Help")
+
+        user_guide_action = QAction("&User Guide", self)
+        user_guide_action.triggered.connect(self.show_user_guide)
+        help_menu.addAction(user_guide_action)
+
+        changelog_action = QAction("&Change Log", self)
+        changelog_action.triggered.connect(self.show_changelog)
+        help_menu.addAction(changelog_action)
+
+        help_menu.addSeparator()
+
+        about_action = QAction("&About", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+
     def get_selected_manager(self) -> PackageManager:
         """Get currently selected package manager."""
         manager_map = {
@@ -171,6 +230,29 @@ class WinPacManMainWindow(QMainWindow):
             "NPM": PackageManager.NPM
         }
         return manager_map[self.manager_combo.currentText()]
+
+    def _get_version_info(self) -> str:
+        """Extract version and date from CHANGELOG.md for display."""
+        import os
+        import re
+
+        changelog_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "CHANGELOG.md")
+        version = "Unknown"
+        date_time = "Unknown"
+
+        if os.path.exists(changelog_path):
+            try:
+                with open(changelog_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Look for first version line: ## [0.3.0] - 2025-12-26 21:20
+                    match = re.search(r'##\s+\[([^\]]+)\]\s+-\s+(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)', content)
+                    if match:
+                        version = match.group(1)
+                        date_time = match.group(2)
+            except Exception:
+                pass
+
+        return f"v{version} ({date_time})"
 
     def refresh_packages(self):
         """Refresh package list using QThread worker."""
@@ -432,11 +514,10 @@ class WinPacManMainWindow(QMainWindow):
         self.package_table.set_packages(packages)
         print(f"[MainWindow] Package table updated with {len(packages)} packages")
 
-        # Show success message in status bar
-        self.status_label.setText(f"Success: Loaded {len(packages)} packages")
-
-        # Auto-clear success message after 3 seconds
-        QTimer.singleShot(3000, lambda: self.status_label.setText("Ready"))
+        # Show package count in status bar (keep it visible)
+        package_word = "package" if len(packages) == 1 else "packages"
+        self.persistent_status = f"{len(packages)} {package_word} loaded - Ready"
+        self.status_label.setText(self.persistent_status)
 
     @pyqtSlot(object)
     def on_install_complete(self, result):
@@ -652,9 +733,9 @@ class WinPacManMainWindow(QMainWindow):
         clipboard = QApplication.clipboard()
         clipboard.setText(text)
 
-        # Show brief feedback
+        # Show brief feedback, then restore persistent status
         self.status_label.setText(f"Copied to clipboard: {text}")
-        QTimer.singleShot(3000, lambda: self.status_label.setText("Ready"))
+        QTimer.singleShot(3000, lambda: self.status_label.setText(self.persistent_status))
 
     def _show_verbose_output(self, result):
         """
@@ -767,6 +848,150 @@ class WinPacManMainWindow(QMainWindow):
         # Only enable Uninstall if package is selected
         if self.selected_package:
             self.uninstall_btn.setEnabled(True)
+
+    def show_user_guide(self):
+        """Show user guide (placeholder)."""
+        QMessageBox.information(
+            self,
+            "User Guide",
+            "User Guide - Coming Soon\n\n"
+            "Comprehensive documentation will be available in a future release.\n\n"
+            "For now, please refer to the README.md and CLAUDE.md files in the project repository."
+        )
+
+    def show_changelog(self):
+        """Display CHANGELOG.md in a dialog."""
+        import os
+
+        # Find CHANGELOG.md in project root
+        changelog_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "CHANGELOG.md")
+
+        if not os.path.exists(changelog_path):
+            QMessageBox.warning(self, "Change Log", "CHANGELOG.md file not found.")
+            return
+
+        # Read changelog
+        try:
+            with open(changelog_path, 'r', encoding='utf-8') as f:
+                changelog_content = f.read()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to read CHANGELOG.md:\n{str(e)}")
+            return
+
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Change Log")
+        dialog.setMinimumWidth(800)
+        dialog.setMinimumHeight(600)
+
+        layout = QVBoxLayout(dialog)
+
+        # Changelog content
+        changelog_display = QTextEdit()
+        changelog_display.setReadOnly(True)
+        changelog_display.setPlainText(changelog_content)
+        changelog_display.setStyleSheet("font-family: 'Consolas', 'Courier New', monospace;")
+        layout.addWidget(changelog_display)
+
+        # Close button
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+
+        dialog.exec()
+
+    def show_about(self):
+        """Show About dialog with version and date."""
+        import os
+        import re
+
+        # Extract version and date/time from CHANGELOG.md
+        changelog_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "CHANGELOG.md")
+        version = "Unknown"
+        date_time = "Unknown"
+
+        if os.path.exists(changelog_path):
+            try:
+                with open(changelog_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Look for first version line: ## [0.3.0] - 2025-12-26 21:20
+                    match = re.search(r'##\s+\[([^\]]+)\]\s+-\s+(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)', content)
+                    if match:
+                        version = match.group(1)
+                        date_time = match.group(2)
+            except Exception:
+                pass
+
+        about_text = f"""<h2>WinPacMan</h2>
+<p><b>Version:</b> {version}</p>
+<p><b>Release Date:</b> {date_time}</p>
+<p><b>Description:</b> Unified Windows Package Manager</p>
+<p>A modern PyQt6 GUI for managing packages across WinGet, Chocolatey, Pip, and NPM.</p>
+<br>
+<p><b>Supported Package Managers:</b></p>
+<ul>
+<li>WinGet - Windows Package Manager</li>
+<li>Chocolatey - The Package Manager for Windows</li>
+<li>Pip - Python Package Installer</li>
+<li>NPM - Node Package Manager</li>
+</ul>
+<br>
+<p>🤖 Built with <a href="https://claude.com/claude-code">Claude Code</a></p>
+<p>© 2025 WinPacMan Project</p>
+"""
+
+        QMessageBox.about(self, "About WinPacMan", about_text)
+
+    def show_configuration(self):
+        """Show configuration file in read-only dialog."""
+        from core.config import config_manager
+        import json
+
+        # Get config file path
+        config_file = config_manager.config_file
+
+        if not config_file.exists():
+            QMessageBox.warning(self, "Configuration", "Configuration file not found.")
+            return
+
+        # Read config
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+            # Pretty print JSON
+            config_text = json.dumps(config_data, indent=2, ensure_ascii=False)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to read configuration:\n{str(e)}")
+            return
+
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Configuration")
+        dialog.setMinimumWidth(700)
+        dialog.setMinimumHeight(500)
+
+        layout = QVBoxLayout(dialog)
+
+        # Header with file path
+        path_label = QLabel(f"<b>Configuration File:</b> {config_file}")
+        path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(path_label)
+
+        layout.addSpacing(10)
+
+        # Config content
+        config_display = QTextEdit()
+        config_display.setReadOnly(True)
+        config_display.setPlainText(config_text)
+        config_display.setStyleSheet("font-family: 'Consolas', 'Courier New', monospace;")
+        layout.addWidget(config_display)
+
+        # Close button
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+
+        dialog.exec()
 
     def apply_theme(self):
         """Apply theme from settings."""

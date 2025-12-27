@@ -2,6 +2,161 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2025-12-26 21:20
+
+### Added - Professional UI and Menu System
+
+- **Menu Bar** (`ui/views/main_window.py`):
+  - Industry-standard menu structure: File, Edit, View, Config, Help
+  - Keyboard shortcuts with Alt key navigation (underlined letters)
+  - File menu with Exit action (Ctrl+Q shortcut)
+  - Edit and View menus (placeholders for future features)
+
+- **Help Menu** (`ui/views/main_window.py`):
+  - **User Guide** - Placeholder dialog directing to README.md and CLAUDE.md
+  - **Change Log** - Displays full CHANGELOG.md in scrollable dialog (800x600)
+    - Monospace font for readability
+    - Read-only QTextEdit widget
+  - **About Dialog** - Professional about box with:
+    - Auto-extracted version number from CHANGELOG.md (regex parsing)
+    - Release date from CHANGELOG.md
+    - Project description and supported package managers
+    - Link to Claude Code
+    - Copyright notice
+
+- **Config Menu** (`ui/views/main_window.py`):
+  - **View Configuration** - Read-only display of config.json
+    - Shows full file path at top (selectable for copying)
+    - Pretty-printed JSON in monospace font
+    - 700x500 dialog with scrolling
+
+- **Version Label** (`ui/views/main_window.py`):
+  - Subdued gray label in upper right corner of UI
+  - Shows: `v0.3.0 (2025-12-26 21:20)`
+  - Auto-extracts from CHANGELOG.md on startup
+  - Smaller font (9pt), gray color (#808080)
+  - Unobtrusive but always visible
+
+- **Animated Spinner** (`ui/views/main_window.py`):
+  - Replaced static hourglass emoji with animated circling dots
+  - 8 Braille pattern characters: ⣾ ⣽ ⣻ ⢿ ⡿ ⣟ ⣯ ⣷
+  - Updates every 100ms (10 FPS) via QTimer
+  - Modern loading indicator like AI chat applications
+  - Starts on operation_started, stops on operation_finished
+  - Shows next to status messages: `⣾ Getting package list...`
+
+- **Verbose Mode** (`ui/views/main_window.py`):
+  - Checkbox in control panel: "Verbose"
+  - Tooltip: "Show detailed package manager output during operations"
+  - When enabled, shows dialog after install/uninstall with:
+    - Full stdout from package manager (monospace font)
+    - Full stderr with errors (red text, monospace)
+    - Exit code and operation details
+  - Perfect for power users debugging installation issues
+  - Disabled by default for clean UX
+
+- **Persistent Status Bar** (`ui/views/main_window.py`):
+  - Package count stays visible after loading
+  - Format: "132 packages loaded - Ready"
+  - Proper grammar: "1 package" vs "132 packages"
+  - Temporary messages (clipboard copy) restore to package count after 3 seconds
+  - No more disappearing package count
+
+### Fixed
+
+- **NPM Windows Compatibility** (`services/package_service.py`):
+  - CRITICAL: NPM commands now work on Windows
+  - Issue: `npm.cmd` not found by subprocess without shell
+  - Solution: Added `shell=True` for all NPM operations:
+    - `_get_npm_installed()` - List global packages
+    - `install_package()` - Install when manager is NPM
+    - `uninstall_package()` - Uninstall when manager is NPM
+  - Tested with NPM 11.6.2 - fully functional
+
+### Technical Details
+
+**Menu System:**
+- `QMenuBar` with `QAction` items
+- Signal/slot connections to handler methods
+- File path resolution using `os.path.dirname(__file__)`
+- Regex version extraction: `r'##\s+\[([^\]]+)\]\s+-\s+(\d{4}-\d{2}-\d{2})'`
+
+**Animated Spinner:**
+- QTimer-based animation loop
+- Spinner state: `spinner_index`, `spinner_frames`, `spinner_timer`
+- `_update_spinner()` method called every 100ms
+- Lifecycle managed by operation signals
+
+**Verbose Dialog:**
+- Custom QDialog with QTextEdit widgets
+- Monospace font: 'Consolas', 'Courier New'
+- Stderr styled with red text (#d32f2f)
+- Displays `OperationResult.details` dict (stdout/stderr/exit_code)
+
+**NPM Fix:**
+- Conditional `shell=True` parameter: `use_shell = (manager == PackageManager.NPM)`
+- Only affects NPM commands, other managers unchanged
+- Windows-specific workaround for .cmd batch files
+
+### User Benefits
+
+- **Professional Appearance**: Industry-standard menu bar like commercial applications
+- **Easy Access to Info**: Quick access to changelog, version, and configuration
+- **Visual Feedback**: Smooth animated spinner shows operations are active
+- **Power User Support**: Verbose mode for debugging installation issues
+- **NPM Support**: NPM package management now works on Windows
+- **Persistent Information**: Package count always visible in status bar
+- **Quick Version Check**: Version label always visible in upper right corner
+
+### Testing v0.3.0
+
+**Menu Bar:**
+1. Click each menu to verify structure
+2. Help → About - Check version shows v0.3.0 and date
+3. Help → Change Log - Scroll through full CHANGELOG.md
+4. Config → View Configuration - Verify config.json displays with full path
+5. File → Exit or Ctrl+Q to close
+
+**Spinner Animation:**
+1. Click Refresh with any package manager
+2. Watch progress label - should see rotating dots
+3. Verify smooth animation at 10 FPS
+
+**Verbose Mode:**
+1. Check "Verbose" checkbox
+2. Install or uninstall a package
+3. Verify detailed output dialog appears after operation
+4. Check stdout and stderr sections display correctly
+
+**NPM Support:**
+1. Select "NPM" from dropdown
+2. Click Refresh
+3. Verify global NPM packages load successfully
+
+**Persistent Status:**
+1. Load packages from any manager
+2. Verify status bar shows: "X packages loaded - Ready"
+3. Copy installation path
+4. After 3 seconds, verify status returns to package count
+
+### Notes
+
+- **Major Release**: Significant UI improvements justify jump to 0.3.0
+- **Menu Placeholders**: Edit and View menus ready for future features
+- **Version Automation**: Version/date auto-extracted from this CHANGELOG
+- **Cross-Platform**: Menu system works on Windows, macOS, Linux
+- **NPM Limitation**: `shell=True` is Windows-specific workaround
+- **Next Phase**: Phase 4 will implement full search functionality
+
+**Key Files Modified:**
+- `ui/views/main_window.py`: Menu bar, dialogs, spinner, verbose mode, version label, persistent status
+- `services/package_service.py`: NPM Windows fix with shell=True
+
+**Tag:**
+- `v0.3.0`: Major release with professional UI enhancements
+
+---
+
 ## [0.0.2] - 2025-12-26
 
 ### Added - Installation Path Discovery and UX Enhancements
