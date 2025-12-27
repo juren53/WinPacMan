@@ -7,13 +7,14 @@ with modern styling.
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QMessageBox, QPushButton, QComboBox, QStatusBar, QApplication
+    QMessageBox, QPushButton, QComboBox, QStatusBar, QApplication,
+    QInputDialog, QDialog, QDialogButtonBox
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont
 from typing import List, Optional
 
-from core.models import PackageManager, Package
+from core.models import PackageManager, Package, PackageStatus
 from services.package_service import PackageManagerService
 from services.settings_service import SettingsService
 from ui.workers.package_worker import (
@@ -229,22 +230,52 @@ class WinPacManMainWindow(QMainWindow):
             self.uninstall_btn.setEnabled(True)
 
     def install_package(self):
-        """Install selected package."""
-        # 1. Validate selection exists
+        """Install selected package or manual package ID (WinGet only)."""
+        # 1. Handle manual package ID entry if no package selected
         if not self.selected_package:
-            QMessageBox.warning(
+            # Check if WinGet is selected
+            current_manager = self.get_selected_manager()
+            if current_manager != PackageManager.WINGET:
+                QMessageBox.warning(
+                    self,
+                    "No Package Selected",
+                    "Please select a package from the list to install.\n\n"
+                    "Manual package ID entry is only available for WinGet."
+                )
+                return
+
+            # Show input dialog for WinGet package ID
+            package_id, ok = QInputDialog.getText(
                 self,
-                "No Package Selected",
-                "Please select a package to install."
+                "Install WinGet Package",
+                "Enter WinGet package ID to install:\n"
+                "(e.g., Microsoft.PowerToys, Git.Git, 7zip.7zip)",
+                text=""
             )
-            return
+
+            if not ok or not package_id.strip():
+                return  # User cancelled or entered nothing
+
+            package_id = package_id.strip()
+
+            # Create temporary Package object for manual entry
+            package_to_install = Package(
+                name=package_id,
+                id=package_id,
+                version="latest",
+                manager=PackageManager.WINGET,
+                status=PackageStatus.AVAILABLE
+            )
+        else:
+            # Use selected package from table
+            package_to_install = self.selected_package
 
         # 2. Show confirmation dialog
         reply = QMessageBox.question(
             self,
             "Confirm Installation",
-            f"Install {self.selected_package.name} ({self.selected_package.version})?\n\n"
-            f"Package Manager: {self.selected_package.manager.value}\n"
+            f"Install {package_to_install.name} ({package_to_install.version})?\n\n"
+            f"Package Manager: {package_to_install.manager.value}\n"
             f"This operation may take several minutes.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
@@ -264,13 +295,13 @@ class WinPacManMainWindow(QMainWindow):
         # 4. Create worker
         self.current_install_worker = PackageInstallWorker(
             self.package_service,
-            self.selected_package.manager,
-            self.selected_package.id
+            package_to_install.manager,
+            package_to_install.id
         )
 
         # 5. Connect signals
         self.current_install_worker.signals.started.connect(
-            lambda: self.on_operation_started(f"Installing {self.selected_package.name}...")
+            lambda: self.on_operation_started(f"Installing {package_to_install.name}...")
         )
         self.current_install_worker.signals.progress.connect(self.on_progress_update)
         self.current_install_worker.signals.operation_complete.connect(
@@ -460,16 +491,133 @@ class WinPacManMainWindow(QMainWindow):
             self.current_uninstall_worker.deleteLater()
             self.current_uninstall_worker = None
 
+    def _get_winget_install_location(self, package_id: str) -> Optional[str]:
+        """
+        Get installation location for a WinGet package by querying Windows Registry.
+
+        WinGet doesn't expose installation paths via CLI, so we query the registry
+        where most applications register their install location.
+        """
+        import winreg
+        import os
+
+        try:
+            # Common registry paths where apps register install info
+            registry_paths = [
+                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+                (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            ]
+
+            # Extract the package name (last part of package ID after the dot)
+            # e.g., "Mozilla.Firefox" -> "Firefox", "Obsidian.Obsidian" -> "Obsidian"
+            package_name = package_id.split('.')[-1].lower()
+
+            for hkey, registry_path in registry_paths:
+                try:
+                    # Open the uninstall registry key
+                    with winreg.OpenKey(hkey, registry_path) as reg_key:
+                        # Enumerate all subkeys (installed applications)
+                        num_subkeys = winreg.QueryInfoKey(reg_key)[0]
+
+                        for i in range(num_subkeys):
+                            try:
+                                subkey_name = winreg.EnumKey(reg_key, i)
+
+                                with winreg.OpenKey(reg_key, subkey_name) as app_key:
+                                    try:
+                                        # Get the DisplayName
+                                        display_name = winreg.QueryValueEx(app_key, "DisplayName")[0]
+
+                                        # Check if this matches our package (case-insensitive)
+                                        if package_name in display_name.lower() or display_name.lower() in package_name:
+                                            # Try to get InstallLocation
+                                            try:
+                                                install_location = winreg.QueryValueEx(app_key, "InstallLocation")[0]
+                                                if install_location and os.path.exists(install_location):
+                                                    return install_location
+                                            except FileNotFoundError:
+                                                # InstallLocation not found, try InstallPath
+                                                try:
+                                                    install_path = winreg.QueryValueEx(app_key, "InstallPath")[0]
+                                                    if install_path and os.path.exists(install_path):
+                                                        return install_path
+                                                except FileNotFoundError:
+                                                    pass
+                                    except FileNotFoundError:
+                                        # DisplayName not found, skip this entry
+                                        pass
+                            except OSError:
+                                # Can't access this subkey, skip it
+                                continue
+
+                except FileNotFoundError:
+                    # Registry path doesn't exist
+                    continue
+
+        except Exception as e:
+            print(f"Failed to get install location from registry: {e}")
+
+        return None
+
     def on_package_details(self, package: Package):
-        """Show package details dialog."""
-        QMessageBox.information(
-            self,
-            "Package Details",
+        """Show package details dialog with copy to clipboard functionality."""
+        # Get installation location for WinGet packages
+        install_location = None
+        if package.manager == PackageManager.WINGET:
+            install_location = self._get_winget_install_location(package.id)
+
+        # Create custom dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Package Details")
+        dialog.setMinimumWidth(500)
+
+        layout = QVBoxLayout(dialog)
+
+        # Package info
+        info_text = (
             f"Name: {package.name}\n"
             f"Version: {package.version}\n"
             f"Manager: {package.manager.value}\n"
             f"Description: {package.description or 'N/A'}"
         )
+
+        info_label = QLabel(info_text)
+        info_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(info_label)
+
+        # Installation location section (if available)
+        if install_location:
+            layout.addSpacing(10)
+
+            location_label = QLabel(f"<b>Installation Location:</b>")
+            layout.addWidget(location_label)
+
+            path_label = QLabel(install_location)
+            path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            path_label.setStyleSheet("padding: 5px; background-color: palette(base); border: 1px solid palette(mid);")
+            layout.addWidget(path_label)
+
+            # Copy button
+            copy_button = QPushButton("Copy Path to Clipboard")
+            copy_button.clicked.connect(lambda: self._copy_to_clipboard(install_location))
+            layout.addWidget(copy_button)
+
+        # Close button
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+
+        dialog.exec()
+
+    def _copy_to_clipboard(self, text: str):
+        """Copy text to system clipboard."""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+
+        # Show brief feedback
+        self.status_label.setText(f"Copied to clipboard: {text}")
+        QTimer.singleShot(3000, lambda: self.status_label.setText("Ready"))
 
     def _log_operation(self, result):
         """Log operation to history file."""
@@ -513,9 +661,11 @@ class WinPacManMainWindow(QMainWindow):
         self.manager_combo.setEnabled(True)
         self.refresh_btn.setEnabled(True)
 
-        # Only enable Install/Uninstall if package is selected
+        # Always enable Install (supports manual WinGet package ID entry)
+        self.install_btn.setEnabled(True)
+
+        # Only enable Uninstall if package is selected
         if self.selected_package:
-            self.install_btn.setEnabled(True)
             self.uninstall_btn.setEnabled(True)
 
     def apply_theme(self):

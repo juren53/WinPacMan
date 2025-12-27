@@ -103,8 +103,9 @@ class PackageTableWidget(QTableWidget):
             if row < 3:  # Debug first 3 packages
                 print(f"[PackageTable] Row {row}: {package.name} v{package.version} ({package.manager.value})")
 
-            # Package name
+            # Package name - STORE PACKAGE OBJECT IN USER DATA
             name_item = QTableWidgetItem(package.name)
+            name_item.setData(Qt.ItemDataRole.UserRole, package)  # Store Package object
             self.setItem(row, 0, name_item)
 
             # Version
@@ -119,8 +120,8 @@ class PackageTableWidget(QTableWidget):
             desc_item = QTableWidgetItem(package.description or "")
             self.setItem(row, 3, desc_item)
 
-            # Apply color coding
-            self._apply_row_color(row, package.manager)
+            # Color coding removed - using system theme for better readability
+            # self._apply_row_color(row, package.manager)
 
         print(f"[PackageTable] All {len(packages)} rows populated")
 
@@ -148,13 +149,21 @@ class PackageTableWidget(QTableWidget):
     def get_selected_package(self) -> Optional[Package]:
         """
         Get currently selected package.
-        
+
         Returns:
             Selected Package object or None
         """
         row = self.currentRow()
-        if 0 <= row < len(self.packages):
-            return self.packages[row]
+        if row < 0:
+            return None
+
+        # Get the Package object from the name column's user data
+        # This works correctly even when the table is sorted
+        name_item = self.item(row, 0)
+        if name_item:
+            package = name_item.data(Qt.ItemDataRole.UserRole)
+            return package
+
         return None
     
     def _on_selection_changed(self):
