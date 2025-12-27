@@ -169,9 +169,15 @@ class MetadataCacheService:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
+        # Sanitize query for FTS5: quote special characters
+        # FTS5 special chars: " - ( ) : * AND OR NOT
+        # Escape double quotes and wrap in quotes for phrase search
+        fts_query = query.replace('"', '""')  # Escape existing quotes
+        fts_query = f'"{fts_query}"'  # Wrap in quotes for phrase search
+
         # Build WHERE clause for manager filter
         manager_filter = ""
-        params = [query]
+        params = [fts_query]
 
         if managers:
             placeholders = ','.join(['?' for _ in managers])

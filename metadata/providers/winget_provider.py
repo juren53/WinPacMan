@@ -1,7 +1,7 @@
 """
 WinGet metadata provider.
 
-Reads package metadata from WinGet's local SQLite database (index.db).
+Reads package metadata from WinGet's local SQLite database (installed.db).
 """
 
 import sqlite3
@@ -14,15 +14,15 @@ from core.models import UniversalPackageMetadata, PackageManager
 
 class WinGetProvider(MetadataProvider):
     """
-    Provider for WinGet using local index.db SQLite database.
+    Provider for WinGet using local installed.db SQLite database.
 
     WinGet maintains a local cache of the entire community repository at:
-    %LOCALAPPDATA%\\Packages\\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\\LocalState\\index.db
+    %LOCALAPPDATA%\\Packages\\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\\LocalState\\Microsoft.Winget.Source_8wekyb3d8bbwe\\installed.db
     """
 
-    # Default path to WinGet's index database
+    # Default path to WinGet's package database
     DEFAULT_DB_PATH = os.path.expandvars(
-        r'%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\index.db'
+        r'%LOCALAPPDATA%\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\Microsoft.Winget.Source_8wekyb3d8bbwe\installed.db'
     )
 
     def __init__(self, db_path: Optional[str] = None):
@@ -30,7 +30,7 @@ class WinGetProvider(MetadataProvider):
         Initialize WinGet provider.
 
         Args:
-            db_path: Path to index.db (uses default if None)
+            db_path: Path to installed.db (uses default if None)
         """
         self.db_path = db_path or self.DEFAULT_DB_PATH
         self._last_check_time: Optional[datetime] = None
@@ -38,7 +38,7 @@ class WinGetProvider(MetadataProvider):
 
     def get_available_packages(self) -> Iterator[UniversalPackageMetadata]:
         """
-        Read all available packages from WinGet's index.db.
+        Read all available packages from WinGet's installed.db.
 
         Yields:
             UniversalPackageMetadata for each package in the repository
@@ -55,50 +55,37 @@ class WinGetProvider(MetadataProvider):
             cursor = conn.cursor()
 
             # Query to get package information
-            # WinGet's schema varies by version, this query should work for most versions
+            # WinGet's installed.db uses normalized tables with foreign key references
             query = """
             SELECT DISTINCT
-                manifest.id as package_id,
-                ids.id as display_id,
+                manifest.rowid as manifest_id,
+                ids.id as package_id,
                 names.name as name,
                 versions.version as version,
-                manifest.publisher as publisher,
-                tags.tag as tags
+                norm_publishers.norm_publisher as publisher
             FROM manifest
             LEFT JOIN ids ON manifest.id = ids.rowid
-            LEFT JOIN names ON manifest.id = names.manifest
-            LEFT JOIN versions ON manifest.id = versions.manifest
-            LEFT JOIN tags ON manifest.id = tags.manifest
-            ORDER BY manifest.id, versions.version DESC
+            LEFT JOIN names ON manifest.name = names.rowid
+            LEFT JOIN versions ON manifest.version = versions.rowid
+            LEFT JOIN norm_publishers_map ON manifest.rowid = norm_publishers_map.manifest
+            LEFT JOIN norm_publishers ON norm_publishers_map.norm_publisher = norm_publishers.rowid
+            ORDER BY manifest.rowid
+            LIMIT 10000
             """
 
             cursor.execute(query)
-            current_package_id = None
-            package_data = None
 
             for row in cursor.fetchall():
-                package_id = row['display_id'] or str(row['package_id'])
+                package_id = row['package_id'] or str(row['manifest_id'])
 
-                # New package - yield previous if exists
-                if package_id != current_package_id:
-                    if package_data:
-                        yield self._create_metadata(package_data)
+                # Create package metadata from row
+                package_data = {
+                    'package_id': package_id,
+                    'name': row['name'] or package_id,
+                    'version': row['version'] or 'Unknown',
+                    'publisher': row['publisher']
+                }
 
-                    current_package_id = package_id
-                    package_data = {
-                        'package_id': package_id,
-                        'name': row['name'] or package_id,
-                        'version': row['version'] or 'Unknown',
-                        'publisher': row['publisher'],
-                        'tags': []
-                    }
-
-                # Accumulate tags
-                if row['tags']:
-                    package_data['tags'].append(row['tags'])
-
-            # Yield last package
-            if package_data:
                 yield self._create_metadata(package_data)
 
             conn.close()
@@ -145,7 +132,7 @@ class WinGetProvider(MetadataProvider):
 
     def is_cache_stale(self) -> bool:
         """
-        Check if index.db has been modified since last check.
+        Check if installed.db has been modified since last check.
 
         Returns:
             True if database file has been modified
