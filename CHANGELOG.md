@@ -2,6 +2,60 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.4.1b] - 2025-12-27 11:30
+
+### Fixed - Cross-Repository Search UI
+
+**Issue:** UI search was hardcoded to only search WinGet repository, preventing cross-repository search functionality despite working cache layer.
+
+**Solution:** Added repository selector checkboxes to enable flexible search across package managers.
+
+### Added
+
+#### UI Controls
+- **Repository filter checkboxes** in search toolbar
+  - WinGet checkbox (default: checked)
+  - Chocolatey checkbox (default: checked)
+  - Tooltips explaining each repository
+  - "Repositories:" label for clarity
+
+### Changed
+
+#### Search Functionality (`ui/views/main_window.py`)
+- **`search_packages()` method** - Now respects repository selection
+  - Reads checkbox states to determine search scope
+  - Validates at least one repository is selected
+  - Uses `managers=None` for cross-repo search (both checked)
+  - Uses `managers=['winget']` or `managers=['chocolatey']` for single-repo
+  - Status messages now show which repositories were searched
+
+#### User Experience
+- Search across both repositories by default (both checkboxes checked)
+- Easily filter to single repository by unchecking other
+- Status bar shows repository scope: "Found 10 results for 'python' in all repositories"
+- Warning if user unchecks both repositories
+
+### Validated
+
+#### Cross-Repository Search Tests
+- ✅ **Cross-repo search working** - Returns results from both WinGet and Chocolatey
+- ✅ **Single-repo filtering** - WinGet-only and Chocolatey-only searches work correctly  
+- ✅ **FTS5 ranking** - Properly ranks results across repositories
+- ✅ **Source attribution** - Results correctly tagged with source manager
+
+**Test Results** (search for "python"):
+- Cross-repo: 10 results (4 WinGet + 6 Chocolatey)
+- WinGet only: 10 results (all WinGet)
+- Chocolatey only: 10 results (all Chocolatey)
+
+### Test Suite
+- **`test_cross_repo_search.py`** - Comprehensive cross-repository validation
+  - Tests cross-repo, WinGet-only, and Chocolatey-only searches
+  - Validates result sources and counts
+  - Confirms FTS5 ranking across repositories
+
+---
+
 ## [0.4.1] - 2025-12-27 11:00
 
 ### Major Feature - Chocolatey Integration & Cross-Repository Search

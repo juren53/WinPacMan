@@ -150,6 +150,21 @@ class WinPacManMainWindow(QMainWindow):
         self.search_btn.setEnabled(False)  # Disabled until user types
         layout.addWidget(self.search_btn)
 
+        # Repository filter checkboxes
+        repo_label = QLabel("Repositories:")
+        repo_label.setStyleSheet("margin-left: 10px;")
+        layout.addWidget(repo_label)
+
+        self.winget_checkbox = QCheckBox("WinGet")
+        self.winget_checkbox.setChecked(True)
+        self.winget_checkbox.setToolTip("Include WinGet packages in search")
+        layout.addWidget(self.winget_checkbox)
+
+        self.chocolatey_checkbox = QCheckBox("Chocolatey")
+        self.chocolatey_checkbox.setChecked(True)
+        self.chocolatey_checkbox.setToolTip("Include Chocolatey packages in search")
+        layout.addWidget(self.chocolatey_checkbox)
+
         # Spacer
         layout.addStretch()
 
@@ -344,7 +359,27 @@ class WinPacManMainWindow(QMainWindow):
             QMessageBox.warning(self, "No Query", "Please enter a search term.")
             return
 
-        print(f"[MainWindow] Searching for: {query}")
+        # Determine which repositories to search based on checkboxes
+        selected_managers = []
+        if self.winget_checkbox.isChecked():
+            selected_managers.append('winget')
+        if self.chocolatey_checkbox.isChecked():
+            selected_managers.append('chocolatey')
+
+        # Validate at least one repository is selected
+        if not selected_managers:
+            QMessageBox.warning(
+                self,
+                "No Repositories Selected",
+                "Please select at least one repository to search (WinGet or Chocolatey)."
+            )
+            return
+
+        # Use None for cross-repo search (both selected), or specific list for single repo
+        managers_filter = None if len(selected_managers) == 2 else selected_managers
+
+        repo_text = "all repositories" if managers_filter is None else ", ".join(selected_managers)
+        print(f"[MainWindow] Searching for '{query}' in {repo_text}")
 
         try:
             # Check if cache needs refresh
@@ -366,8 +401,8 @@ class WinPacManMainWindow(QMainWindow):
                     self.search_packages()
                 return
 
-            # Search the cache
-            results = self.metadata_cache.search(query, managers=['winget'], limit=100)
+            # Search the cache with selected repositories
+            results = self.metadata_cache.search(query, managers=managers_filter, limit=100)
 
             if results:
                 # Convert to Package objects
@@ -375,18 +410,18 @@ class WinPacManMainWindow(QMainWindow):
 
                 # Display in table
                 self.package_table.set_packages(packages)
-                self.persistent_status = f"Found {len(packages)} results for '{query}'"
+                self.persistent_status = f"Found {len(packages)} results for '{query}' in {repo_text}"
                 self.status_label.setText(self.persistent_status)
 
-                print(f"[MainWindow] Found {len(packages)} results")
+                print(f"[MainWindow] Found {len(packages)} results from {repo_text}")
             else:
                 self.package_table.clear_packages()
-                self.persistent_status = f"No results found for '{query}'"
+                self.persistent_status = f"No results found for '{query}' in {repo_text}"
                 self.status_label.setText(self.persistent_status)
                 QMessageBox.information(
                     self,
                     "No Results",
-                    f"No packages found matching '{query}'."
+                    f"No packages found matching '{query}' in {repo_text}."
                 )
 
         except Exception as e:
