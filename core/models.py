@@ -197,6 +197,52 @@ class PackageListResult:
         }
 
 
+@dataclass
+class UniversalPackageMetadata:
+    """
+    Unified metadata structure for package cache system.
+
+    This model is used by the metadata cache to store package information
+    from all package managers in a normalized format for fast searching.
+    """
+    package_id: str           # Unique ID (e.g., "Microsoft.VisualStudioCode")
+    name: str                 # Display name
+    version: str              # Current/latest version
+    manager: PackageManager   # Source manager
+
+    # Optional common fields
+    description: Optional[str] = None
+    author: Optional[str] = None
+    publisher: Optional[str] = None
+    homepage: Optional[str] = None
+    license: Optional[str] = None
+
+    # Manager-specific metadata (stored as JSON string)
+    extra_metadata: Optional[str] = None
+
+    # Search/indexing fields
+    search_tokens: Optional[str] = None  # Space-separated tokens for FTS
+    tags: Optional[str] = None            # Comma-separated tags
+
+    # Cache metadata
+    cache_timestamp: Optional[datetime] = None
+    is_installed: bool = False
+
+    def to_package(self) -> Package:
+        """Convert to standard Package object"""
+        return Package(
+            name=self.name,
+            id=self.package_id,
+            version=self.version,
+            manager=self.manager,
+            status=PackageStatus.INSTALLED if self.is_installed else PackageStatus.AVAILABLE,
+            description=self.description,
+            publisher=self.publisher or self.author,
+            homepage=self.homepage,
+            tags=self.tags.split(',') if self.tags else []
+        )
+
+
 # Custom exceptions for package management
 class PackageManagerError(Exception):
     """Base exception for package manager operations"""

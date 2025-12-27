@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QMessageBox, QPushButton, QComboBox, QStatusBar, QApplication,
     QInputDialog, QDialog, QDialogButtonBox, QCheckBox, QTextEdit,
-    QMenuBar, QMenu
+    QMenuBar, QMenu, QLineEdit
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont, QAction
@@ -23,6 +23,8 @@ from ui.workers.package_worker import (
     PackageInstallWorker,
     PackageUninstallWorker
 )
+from metadata import MetadataCacheService, WinGetProvider
+from core.config import config_manager
 from ui.components.package_table import PackageTableWidget
 
 
@@ -43,6 +45,14 @@ class WinPacManMainWindow(QMainWindow):
         # Services
         self.package_service = PackageManagerService()
         self.settings_service = SettingsService()
+
+        # Initialize metadata cache
+        cache_db_path = config_manager.get_data_file_path("metadata_cache.db")
+        self.metadata_cache = MetadataCacheService(cache_db_path)
+
+        # Register WinGet provider
+        winget_provider = WinGetProvider()
+        self.metadata_cache.register_provider(winget_provider)
 
         # State
         self.current_packages: List[Package] = []
@@ -123,6 +133,26 @@ class WinPacManMainWindow(QMainWindow):
         # Spacer
         layout.addStretch()
 
+        # Search box
+        search_label = QLabel("Search:")
+        layout.addWidget(search_label)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search packages...")
+        self.search_input.setFixedWidth(200)
+        self.search_input.textChanged.connect(self.on_search_text_changed)
+        self.search_input.returnPressed.connect(self.search_packages)
+        layout.addWidget(self.search_input)
+
+        # Search button
+        self.search_btn = QPushButton("Search")
+        self.search_btn.clicked.connect(self.search_packages)
+        self.search_btn.setEnabled(False)  # Disabled until user types
+        layout.addWidget(self.search_btn)
+
+        # Spacer
+        layout.addStretch()
+
         # Progress label (shows loading status)
         self.progress_label = QLabel("")
         self.progress_label.setVisible(False)
@@ -133,12 +163,6 @@ class WinPacManMainWindow(QMainWindow):
         self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.clicked.connect(self.refresh_packages)
         layout.addWidget(self.refresh_btn)
-
-        # Search button (placeholder for Phase 4)
-        self.search_btn = QPushButton("Search")
-        self.search_btn.clicked.connect(self.search_packages)
-        self.search_btn.setEnabled(False)
-        layout.addWidget(self.search_btn)
 
         # Install button (placeholder for Phase 3)
         self.install_btn = QPushButton("Install")
@@ -307,13 +331,103 @@ class WinPacManMainWindow(QMainWindow):
         self.install_btn.setEnabled(False)
         self.uninstall_btn.setEnabled(False)
 
+    def on_search_text_changed(self, text: str):
+        """Handle search text changes - trigger search on Enter or button click only."""
+        # Enable/disable search button based on input
+        self.search_btn.setEnabled(len(text.strip()) > 0)
+
     def search_packages(self):
-        """Search packages (placeholder for Phase 4)."""
-        QMessageBox.information(
-            self,
-            "Coming Soon",
-            "Search functionality will be implemented in Phase 4."
-        )
+        """Search packages using metadata cache."""
+        query = self.search_input.text().strip()
+
+        if not query:
+            QMessageBox.warning(self, "No Query", "Please enter a search term.")
+            return
+
+        print(f"[MainWindow] Searching for: {query}")
+
+        try:
+            # Check if cache needs refresh
+            cache_count = self.metadata_cache.get_package_count('winget')
+
+            if cache_count == 0:
+                # First time - refresh cache
+                reply = QMessageBox.question(
+                    self,
+                    "Initialize Cache",
+                    "The package metadata cache is empty. Would you like to initialize it now?\n\n"
+                    "This will take about 30 seconds and only needs to be done once.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.refresh_metadata_cache()
+                    # After refresh, search again
+                    self.search_packages()
+                return
+
+            # Search the cache
+            results = self.metadata_cache.search(query, managers=['winget'], limit=100)
+
+            if results:
+                # Convert to Package objects
+                packages = [metadata.to_package() for metadata in results]
+
+                # Display in table
+                self.package_table.set_packages(packages)
+                self.persistent_status = f"Found {len(packages)} results for '{query}'"
+                self.status_label.setText(self.persistent_status)
+
+                print(f"[MainWindow] Found {len(packages)} results")
+            else:
+                self.package_table.clear_packages()
+                self.persistent_status = f"No results found for '{query}'"
+                self.status_label.setText(self.persistent_status)
+                QMessageBox.information(
+                    self,
+                    "No Results",
+                    f"No packages found matching '{query}'."
+                )
+
+        except Exception as e:
+            print(f"[MainWindow] Search error: {e}")
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(
+                self,
+                "Search Error",
+                f"An error occurred while searching: {str(e)}"
+            )
+
+    def refresh_metadata_cache(self):
+        """Refresh the metadata cache from providers."""
+        print("[MainWindow] Refreshing metadata cache...")
+
+        # Show progress
+        self.status_label.setText("Refreshing package metadata cache...")
+        QApplication.processEvents()  # Update UI
+
+        try:
+            self.metadata_cache.refresh_cache(manager='winget', force=True)
+
+            cache_count = self.metadata_cache.get_package_count('winget')
+            self.status_label.setText(f"Cache refreshed: {cache_count} packages indexed")
+
+            QMessageBox.information(
+                self,
+                "Cache Refreshed",
+                f"Successfully cached {cache_count} packages from WinGet."
+            )
+
+        except Exception as e:
+            print(f"[MainWindow] Cache refresh error: {e}")
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(
+                self,
+                "Cache Error",
+                f"An error occurred while refreshing cache: {str(e)}"
+            )
 
     @pyqtSlot(Package)
     def on_package_selected(self, package: Package):
