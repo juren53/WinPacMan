@@ -742,7 +742,9 @@ class WinPacManMainWindow(QMainWindow):
             # Collect all candidates with confidence scores
             candidates = []
             registry_entries_scanned = 0
+            registry_entries_total = 0  # Including those without paths
             sample_entries = []  # For debug: collect sample of what we're checking
+            sample_all_entries = []  # All entries including those without install paths
 
             for hkey, registry_path in registry_paths:
                 try:
@@ -755,6 +757,13 @@ class WinPacManMainWindow(QMainWindow):
                                     try:
                                         display_name = winreg.QueryValueEx(app_key, "DisplayName")[0]
                                         install_path = get_install_path(app_key)
+
+                                        # Track ALL entries with DisplayName (even without install path)
+                                        if display_name:
+                                            registry_entries_total += 1
+                                            if len(sample_all_entries) < 20:
+                                                has_path = "✓" if install_path else "✗"
+                                                sample_all_entries.append(f"{has_path} {display_name} (subkey: {subkey_name})")
 
                                         if not install_path or not display_name:
                                             continue
@@ -852,11 +861,11 @@ class WinPacManMainWindow(QMainWindow):
                     continue
 
             # Debug output
-            print(f"[InstallPath] Scanned {registry_entries_scanned} registry entries")
-            if not candidates and registry_entries_scanned > 0:
-                print(f"[InstallPath] Sample of scanned entries:")
-                for entry in sample_entries:
-                    print(f"  - {entry}")
+            print(f"[InstallPath] Scanned {registry_entries_scanned} entries with install paths ({registry_entries_total} total entries)")
+            if not candidates and registry_entries_total > 0:
+                print(f"[InstallPath] Sample of ALL registry entries (✓=has path, ✗=no path):")
+                for entry in sample_all_entries:
+                    print(f"  {entry}")
 
             # Sort by confidence (highest first)
             candidates.sort(key=lambda x: x[0], reverse=True)
