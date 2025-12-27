@@ -2,6 +2,124 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.0.2] - 2025-12-26
+
+### Added - Installation Path Discovery and UX Enhancements
+
+- **Installation Path Display** (`ui/views/main_window.py`):
+  - `_get_winget_install_location()` method queries Windows Registry for actual installation directories
+  - Searches three registry hives: HKLM, HKLM WOW6432Node, HKCU
+  - Looks up `InstallLocation` and `InstallPath` registry values
+  - Matches package ID to registry DisplayName (case-insensitive)
+  - Verifies paths exist before returning
+  - Displays in package details dialog for WinGet packages only
+
+- **Enhanced Package Details Dialog** (`ui/views/main_window.py`):
+  - Custom `QDialog` replaces simple `QMessageBox` for richer UI
+  - Shows package information: Name, Version, Manager, Description
+  - Installation Location section (when available):
+    - Highlighted box with selectable text
+    - One-click "Copy Path to Clipboard" button
+    - Visual feedback in status bar: "Copied to clipboard: [path]"
+    - Auto-clears status message after 3 seconds
+  - Useful for adding installation directories to PATH environment variable
+
+- **Manual Package Installation** (`ui/views/main_window.py`):
+  - `QInputDialog` for entering WinGet package IDs directly
+  - Install button always enabled when WinGet selected (no selection required)
+  - Supports installing packages not yet visible in the list
+  - Example package IDs: `Microsoft.PowerToys`, `Git.Git`, `7zip.7zip`
+  - Creates temporary Package object with user-entered ID
+  - Falls back to standard selection-based installation if package selected
+
+### Fixed
+
+- **Critical Sorting Bug** (`ui/components/package_table.py`):
+  - **CRITICAL**: Fixed bug where selecting package after sorting could uninstall wrong package
+  - Previously used row index on sorted table: `self.packages[row]`
+  - Now stores Package object in table cell's UserRole data: `name_item.setData(Qt.ItemDataRole.UserRole, package)`
+  - `get_selected_package()` retrieves Package from cell data instead of array index
+  - Selection is now 100% safe regardless of sort order
+  - Prevents accidental uninstallation of wrong applications
+
+### Changed
+
+- **UI Theme Integration** (`ui/components/package_table.py`):
+  - Removed color-coded table backgrounds (light green/orange/blue/pink)
+  - Now uses system theme colors for table display
+  - Much easier on eyes for extended viewing sessions
+  - Better integration with Windows light/dark mode
+  - Commented out `_apply_row_color()` calls in `set_packages()`
+
+- **Button State Logic** (`ui/views/main_window.py`):
+  - Install button always enabled (supports manual WinGet ID entry)
+  - Uninstall button only enabled when package selected
+  - Previously both buttons required package selection
+
+### User Benefits
+
+- **Time Saver**: Installation paths readily available for adding to PATH
+- **Safety**: Correct package always selected/uninstalled even after sorting
+- **Comfort**: System theme colors reduce eye strain
+- **Flexibility**: Install any WinGet package by ID without searching first
+
+### Technical Details
+
+**Windows Registry Lookup:**
+- `winreg.OpenKey()` accesses uninstall registry keys
+- Enumerates all subkeys (installed applications)
+- Matches package name (e.g., "Firefox" from "Mozilla.Firefox")
+- Extracts InstallLocation or InstallPath values
+- Only returns paths that actually exist on filesystem
+
+**Qt Data Storage:**
+- `Qt.ItemDataRole.UserRole` stores Python objects in table cells
+- Survives table sorting operations intact
+- Retrieved via `item.data(Qt.ItemDataRole.UserRole)`
+
+### Testing v0.0.2
+
+**Installation Path Feature:**
+1. Select "WinGet" → Click Refresh
+2. Double-click on Mozilla Firefox, Notepad++, or VLC
+3. Verify "Installation Location" section appears with correct path
+4. Click "Copy Path to Clipboard"
+5. Check status bar shows confirmation message
+6. Paste in Notepad to verify clipboard contents
+
+**Manual Installation:**
+1. Select "WinGet" (ensure no package selected)
+2. Click Install button
+3. Enter package ID: `Microsoft.PowerToys`
+4. Confirm installation
+5. Verify package installs successfully
+
+**Sorting Safety:**
+1. Load WinGet packages
+2. Click "Version" column header to sort
+3. Select any package
+4. Verify package details dialog shows correct package name
+5. Test uninstall to ensure correct package targeted
+
+### Notes
+
+- **Minor Version Bump**: Significant user-facing features justify 0.0.1 → 0.0.2
+- **Registry Access**: Read-only registry queries, no write operations
+- **Path Availability**: Not all apps register InstallLocation in registry
+  - Apps that don't register will show basic details without path
+  - This is a Windows limitation, not a bug
+- **Platform Specific**: Registry lookup Windows-only (WinGet is Windows-only)
+- **Next Phase**: Phase 4 will implement full search functionality
+
+**Key Files Modified:**
+- `ui/views/main_window.py`: Registry lookup, enhanced dialog, manual entry, clipboard copy
+- `ui/components/package_table.py`: UserRole data storage, theme integration
+
+**Tag:**
+- `v0.0.2`: Minor release with installation path discovery and UX enhancements
+
+---
+
 ## [0.0.1d] - 2025-12-26
 
 ### Added - Phase 3: Install/Uninstall Functionality
