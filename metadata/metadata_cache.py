@@ -412,6 +412,64 @@ class MetadataCacheService:
         conn.close()
         return packages
 
+    def get_manager_for_package(self, package_id: str, package_name: str = None) -> Optional[str]:
+        """
+        Query available packages cache to determine which manager can manage a package.
+
+        This is used for installed packages where registry fingerprinting failed to
+        detect the source manager. We lookup the package in available repos to find
+        which manager can still manage it.
+
+        Args:
+            package_id: Package ID to search for
+            package_name: Optional package name for fuzzy matching
+
+        Returns:
+            Manager name (winget, chocolatey, etc.) or None if not found in repos
+        """
+        conn = sqlite3.connect(self.cache_db_path)
+        cursor = conn.cursor()
+
+        # Try exact package_id match first
+        cursor.execute("""
+            SELECT manager FROM packages
+            WHERE package_id = ? AND is_installed = 0
+            LIMIT 1
+        """, (package_id,))
+
+        row = cursor.fetchone()
+        if row:
+            conn.close()
+            return row[0]
+
+        # Try case-insensitive package_id match
+        cursor.execute("""
+            SELECT manager FROM packages
+            WHERE LOWER(package_id) = LOWER(?) AND is_installed = 0
+            LIMIT 1
+        """, (package_id,))
+
+        row = cursor.fetchone()
+        if row:
+            conn.close()
+            return row[0]
+
+        # If package_name provided, try name match as fallback
+        if package_name:
+            cursor.execute("""
+                SELECT manager FROM packages
+                WHERE LOWER(name) = LOWER(?) AND is_installed = 0
+                LIMIT 1
+            """, (package_name,))
+
+            row = cursor.fetchone()
+            if row:
+                conn.close()
+                return row[0]
+
+        conn.close()
+        return None
+
     def _update_installed_state(self, packages: List):
         """
         Update cache with installed package state from registry scan.

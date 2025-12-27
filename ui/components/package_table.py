@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from typing import List, Optional
 
-from core.models import Package, PackageManager
+from core.models import Package, PackageManager, PackageStatus
 
 
 class PackageTableWidget(QTableWidget):
@@ -115,8 +115,11 @@ class PackageTableWidget(QTableWidget):
             version_item = QTableWidgetItem(package.version)
             self.setItem(row, 1, version_item)
 
-            # Manager - capitalize and format nicely
-            manager_display = self._format_manager_name(package.manager.value)
+            # Manager - show "Installed" for installed packages, manager name for available
+            if package.status == PackageStatus.INSTALLED:
+                manager_display = "Installed"
+            else:
+                manager_display = self._format_manager_name(package.manager.value)
             manager_item = QTableWidgetItem(manager_display)
             self.setItem(row, 2, manager_item)
 

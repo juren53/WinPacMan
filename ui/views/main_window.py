@@ -403,8 +403,8 @@ class WinPacManMainWindow(QMainWindow):
 
             installed = self.metadata_cache.get_installed_packages(managers=managers_filter)
 
-            # Convert to Package objects and display
-            packages = [m.to_package() for m in installed]
+            # Convert to Package objects with smart manager resolution
+            packages = [m.to_package(cache_service=self.metadata_cache) for m in installed]
             self.package_table.set_packages(packages)
 
             # Update status
@@ -523,7 +523,7 @@ class WinPacManMainWindow(QMainWindow):
 
             if results:
                 # Convert to Package objects
-                packages = [metadata.to_package() for metadata in results]
+                packages = [metadata.to_package(cache_service=self.metadata_cache) for metadata in results]
 
                 # Display in table
                 self.package_table.set_packages(packages)
@@ -1130,7 +1130,7 @@ class WinPacManMainWindow(QMainWindow):
                                         if display_name:
                                             registry_entries_total += 1
                                             if len(sample_all_entries) < 20:
-                                                has_path = "✓" if install_path else "✗"
+                                                has_path = "[+]" if install_path else "[-]"
                                                 sample_all_entries.append(f"{has_path} {display_name} (subkey: {subkey_name})")
 
                                         if not install_path or not display_name:
@@ -1231,7 +1231,7 @@ class WinPacManMainWindow(QMainWindow):
             # Debug output
             print(f"[InstallPath] Scanned {registry_entries_scanned} entries with install paths ({registry_entries_total} total entries)")
             if not candidates and registry_entries_total > 0:
-                print(f"[InstallPath] Sample of ALL registry entries (✓=has path, ✗=no path):")
+                print(f"[InstallPath] Sample of ALL registry entries ([+]=has path, [-]=no path):")
                 for entry in sample_all_entries:
                     print(f"  {entry}")
 
@@ -1247,10 +1247,10 @@ class WinPacManMainWindow(QMainWindow):
 
                 # Only return if confidence is high enough (>= 70 to be more strict)
                 if candidates[0][0] >= 70:
-                    print(f"[InstallPath] ✓ Returning best match: {candidates[0][1]}")
+                    print(f"[InstallPath] [OK] Returning best match: {candidates[0][1]}")
                     return candidates[0][2]
                 else:
-                    print(f"[InstallPath] ✗ Best match confidence too low ({candidates[0][0]}), returning None")
+                    print(f"[InstallPath] [SKIP] Best match confidence too low ({candidates[0][0]}), returning None")
             else:
                 print(f"[InstallPath] No candidates found in registry")
 
@@ -1278,7 +1278,7 @@ class WinPacManMainWindow(QMainWindow):
                                 if len(parts) == 2:
                                     install_path = parts[1].strip()
                                     if install_path and os.path.exists(install_path):
-                                        print(f"[InstallPath] ✓ Found via winget show: {install_path}")
+                                        print(f"[InstallPath] [OK] Found via winget show: {install_path}")
                                         return install_path
                                     else:
                                         print(f"[InstallPath] Path from winget doesn't exist: {install_path}")
@@ -1315,13 +1315,22 @@ class WinPacManMainWindow(QMainWindow):
 
         layout = QVBoxLayout(dialog)
 
-        # Package info
-        info_text = (
-            f"Name: {package.name}\n"
-            f"Version: {package.version}\n"
-            f"Manager: {package.manager.value}\n"
-            f"Description: {package.description or 'N/A'}"
-        )
+        # Package info - show source for installed packages
+        if package.status == PackageStatus.INSTALLED:
+            info_text = (
+                f"Name: {package.name}\n"
+                f"Version: {package.version}\n"
+                f"Status: Installed\n"
+                f"Source: {self._format_manager_name(package.manager.value)}\n"
+                f"Description: {package.description or 'N/A'}"
+            )
+        else:
+            info_text = (
+                f"Name: {package.name}\n"
+                f"Version: {package.version}\n"
+                f"Manager: {package.manager.value}\n"
+                f"Description: {package.description or 'N/A'}"
+            )
 
         info_label = QLabel(info_text)
         info_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -1351,6 +1360,27 @@ class WinPacManMainWindow(QMainWindow):
 
         dialog.exec()
 
+    def _format_manager_name(self, manager_value: str) -> str:
+        """
+        Format package manager name for display.
+
+        Args:
+            manager_value: Raw manager value from enum (e.g., "winget", "unknown")
+
+        Returns:
+            Formatted display name (e.g., "WinGet", "Unknown")
+        """
+        formatting_map = {
+            'winget': 'WinGet',
+            'chocolatey': 'Chocolatey',
+            'pip': 'Pip',
+            'npm': 'NPM',
+            'scoop': 'Scoop',
+            'msstore': 'MS Store',
+            'unknown': 'Unknown'
+        }
+        return formatting_map.get(manager_value, manager_value.capitalize())
+
     def _copy_to_clipboard(self, text: str):
         """Copy text to system clipboard."""
         clipboard = QApplication.clipboard()
@@ -1379,7 +1409,7 @@ class WinPacManMainWindow(QMainWindow):
         header_text = (
             f"<b>Operation:</b> {result.operation}<br>"
             f"<b>Package:</b> {result.package}<br>"
-            f"<b>Success:</b> {'✓ Yes' if result.success else '✗ No'}<br>"
+            f"<b>Success:</b> {'Yes' if result.success else 'No'}<br>"
             f"<b>Exit Code:</b> {result.details.get('exit_code', 'N/A')}"
         )
         header_label = QLabel(header_text)

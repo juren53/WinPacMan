@@ -237,13 +237,36 @@ class UniversalPackageMetadata:
     install_source: Optional[str] = None  # "winget", "chocolatey", "scoop", "msstore", "unknown"
     install_location: Optional[str] = None
 
-    def to_package(self) -> Package:
-        """Convert to standard Package object"""
+    def to_package(self, cache_service=None) -> Package:
+        """
+        Convert to standard Package object.
+
+        Args:
+            cache_service: Optional MetadataCacheService for manager resolution.
+                          When provided, UNKNOWN managers are resolved by querying
+                          available packages cache.
+
+        Returns:
+            Package object with resolved manager
+        """
+        manager = self.manager
+
+        # Smart manager resolution for UNKNOWN packages
+        # If registry fingerprinting failed, check if package exists in available repos
+        if manager == PackageManager.UNKNOWN and cache_service and self.is_installed:
+            repo_manager = cache_service.get_manager_for_package(
+                package_id=self.package_id,
+                package_name=self.name
+            )
+            if repo_manager:
+                manager = PackageManager(repo_manager)
+                print(f"[SmartManager] Resolved {self.name}: unknown -> {repo_manager}")
+
         return Package(
             name=self.name,
             id=self.package_id,
             version=self.version,
-            manager=self.manager,
+            manager=manager,
             status=PackageStatus.INSTALLED if self.is_installed else PackageStatus.AVAILABLE,
             description=self.description,
             publisher=self.publisher or self.author,
