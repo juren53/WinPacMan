@@ -730,6 +730,8 @@ class WinPacManMainWindow(QMainWindow):
 
             # Collect all candidates with confidence scores
             candidates = []
+            registry_entries_scanned = 0
+            sample_entries = []  # For debug: collect sample of what we're checking
 
             for hkey, registry_path in registry_paths:
                 try:
@@ -745,6 +747,12 @@ class WinPacManMainWindow(QMainWindow):
 
                                         if not install_path or not display_name:
                                             continue
+
+                                        registry_entries_scanned += 1
+
+                                        # Collect sample entries for debug (first 10)
+                                        if len(sample_entries) < 10:
+                                            sample_entries.append(f"{display_name} (subkey: {subkey_name})")
 
                                         display_normalized = normalize_name(display_name)
                                         subkey_normalized = normalize_name(subkey_name)
@@ -831,6 +839,13 @@ class WinPacManMainWindow(QMainWindow):
                                 continue
                 except FileNotFoundError:
                     continue
+
+            # Debug output
+            print(f"[InstallPath] Scanned {registry_entries_scanned} registry entries")
+            if not candidates and registry_entries_scanned > 0:
+                print(f"[InstallPath] Sample of scanned entries:")
+                for entry in sample_entries:
+                    print(f"  - {entry}")
 
             # Sort by confidence (highest first)
             candidates.sort(key=lambda x: x[0], reverse=True)
