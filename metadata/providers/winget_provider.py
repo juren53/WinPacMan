@@ -241,3 +241,44 @@ class WinGetProvider(MetadataProvider):
                 metadata['license'] = line.split(':', 1)[1].strip()
 
         return self._create_metadata(metadata)
+
+    def fetch_all_packages(self, progress_callback=None) -> Iterator[UniversalPackageMetadata]:
+        """
+        Fetch all packages from the full WinGet repository.
+
+        This method uses the winget.run API for fast initial sync.
+        For self-hosted/offline scenarios, use GitHub manifest sync instead.
+
+        Args:
+            progress_callback: Optional callback(current, total, message)
+
+        Yields:
+            UniversalPackageMetadata for each package in the repository
+        """
+        from metadata.sync.wingetrun_fetcher import WinGetRunFetcher
+
+        print("[WinGetProvider] Fetching full repository from winget.run API...")
+
+        fetcher = WinGetRunFetcher()
+
+        for pkg_data in fetcher.fetch_all_packages(progress_callback):
+            # Convert to UniversalPackageMetadata
+            metadata = UniversalPackageMetadata(
+                package_id=pkg_data['package_id'],
+                name=pkg_data['name'],
+                version=pkg_data['version'],
+                manager=PackageManager.WINGET,
+                description=pkg_data.get('description'),
+                publisher=pkg_data.get('publisher'),
+                homepage=pkg_data.get('homepage'),
+                license=pkg_data.get('license'),
+                tags=pkg_data.get('tags'),
+                search_tokens=self._generate_tokens(
+                    pkg_data['package_id'],
+                    pkg_data['name'],
+                    pkg_data.get('publisher', '')
+                ),
+                cache_timestamp=datetime.now()
+            )
+
+            yield metadata

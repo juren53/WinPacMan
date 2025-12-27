@@ -119,14 +119,38 @@ class MetadataCacheService:
         self.providers.append(provider)
         print(f"[MetadataCache] Registered provider: {provider.get_manager_name()}")
 
-    def refresh_cache(self, manager: Optional[str] = None, force: bool = False):
+    def refresh_cache(self, manager: Optional[str] = None, packages=None, force: bool = False):
         """
         Refresh metadata cache from providers.
 
         Args:
             manager: Specific manager to refresh (None = all)
+            packages: Optional iterator/list of packages to cache (if None, fetch from provider)
             force: Force refresh even if cache is fresh
         """
+        # If packages provided, bulk update for specified manager
+        if packages is not None:
+            if not manager:
+                raise ValueError("Manager name required when providing packages")
+
+            print(f"[MetadataCache] Bulk updating cache for {manager}...")
+
+            # Clear existing cache for this manager
+            self._clear_manager_cache(manager)
+
+            # Insert new metadata
+            count = 0
+            for package in packages:
+                self._insert_package(package)
+                count += 1
+
+                if count % 500 == 0:
+                    print(f"[MetadataCache] Cached {count} packages from {manager}...")
+
+            print(f"[MetadataCache] Finished caching {count} packages from {manager}")
+            return
+
+        # Default behavior: fetch from providers
         for provider in self.providers:
             # Skip if not specified
             if manager and provider.get_manager_name() != manager:
