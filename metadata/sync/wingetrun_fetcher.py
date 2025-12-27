@@ -101,10 +101,15 @@ class WinGetRunFetcher:
                 print(f"[WinGetRun] Request failed: {response.status_code}")
                 return
 
-            packages = response.json()
+            data = response.json()
 
-            if not isinstance(packages, list):
-                print("[WinGetRun] Unexpected response format")
+            # Response format: {"Packages": [...]}
+            if isinstance(data, dict) and 'Packages' in data:
+                packages = data['Packages']
+            elif isinstance(data, list):
+                packages = data
+            else:
+                print(f"[WinGetRun] Unexpected response format: {type(data)}")
                 return
 
             total = len(packages)
