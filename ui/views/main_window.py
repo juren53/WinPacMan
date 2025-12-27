@@ -645,26 +645,86 @@ class WinPacManMainWindow(QMainWindow):
         try:
             print(f"[InstallPath] Looking for: {package_id}")
 
-            registry_paths = [
-                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
-                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
-                (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            # Skip package IDs that are just version numbers (e.g., "4.7.1", "1.2.3")
+            # These won't match anything meaningful in the registry
+            if re.match(r'^\d+(\.\d+)*$', package_id):
+                print(f"[InstallPath] Skipping version-only package ID")
+                return None
+
+            # Handle ARP (Add/Remove Programs) registry paths from WinGet
+            # Format: ARP\Machine\X64\PackageName or ARP\User\X64\PackageName
+            actual_package_id = package_id
+            target_hive = None  # None means search all hives
+
+            if package_id.startswith("ARP\\"):
+                parts = package_id.split("\\")
+                if len(parts) >= 4:
+                    # Extract: ARP\Machine\X64\Vim 9.1 -> "Vim 9.1"
+                    actual_package_id = "\\".join(parts[3:])
+
+                    # Determine which registry hive to search
+                    if parts[1].lower() == "machine":
+                        target_hive = "HKLM"
+                    elif parts[1].lower() == "user":
+                        target_hive = "HKCU"
+
+                    print(f"[InstallPath] Detected ARP format, extracted: {actual_package_id} (hive: {target_hive or 'all'})")
+
+            # Filter registry paths based on target hive
+            all_registry_paths = [
+                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", "HKLM"),
+                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", "HKLM"),
+                (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", "HKCU"),
             ]
 
+            if target_hive:
+                registry_paths = [(hkey, path) for hkey, path, hive in all_registry_paths if hive == target_hive]
+            else:
+                registry_paths = [(hkey, path) for hkey, path, _ in all_registry_paths]
+
             # Prepare search terms: full package ID and individual parts
-            package_id_normalized = normalize_name(package_id)
-            package_parts = package_id.split('.')
+            package_id_normalized = normalize_name(actual_package_id)
+            package_parts = actual_package_id.split('.')
 
             # Create list of search terms to try (in priority order)
             search_terms = []
-            if len(package_parts) > 1:
+
+            # For ARP packages, the package ID IS the subkey name - prioritize exact match
+            if package_id.startswith("ARP\\"):
+                # Try exact subkey match first with highest confidence
+                search_terms.append((actual_package_id, "arp_subkey", 120))  # Exact match (not normalized)
+                search_terms.append((package_id_normalized, "arp_normalized", 100))
+
+                # Also try just the base name without version numbers
+                # "Vim 9.1" -> "Vim"
+                base_name = re.sub(r'\s+\d+(\.\d+)*$', '', actual_package_id).strip()
+                if base_name and base_name != actual_package_id:
+                    search_terms.append((normalize_name(base_name), "arp_base", 90))
+                    print(f"[InstallPath] ARP base name: {base_name}")
+
+            elif len(package_parts) > 1:
                 # For "CPUID.HWMonitor", try: full ID, last part, first part
                 search_terms.append((package_id_normalized, "full_id", 100))  # Base confidence for full ID
-                search_terms.append((normalize_name(package_parts[-1]), "product", 80))  # Product name
-                search_terms.append((normalize_name(package_parts[0]), "publisher", 70))  # Publisher name
+
+                # Only add parts that aren't just version numbers
+                last_part = package_parts[-1]
+                first_part = package_parts[0]
+
+                if not re.match(r'^\d+$', last_part) and len(last_part) > 2:
+                    search_terms.append((normalize_name(last_part), "product", 80))  # Product name
+
+                if not re.match(r'^\d+$', first_part) and len(first_part) > 2:
+                    search_terms.append((normalize_name(first_part), "publisher", 70))  # Publisher name
+
             else:
-                # Single-part ID
-                search_terms.append((package_id_normalized, "full_id", 100))
+                # Single-part ID (if it's not a version number)
+                if len(actual_package_id) > 2:
+                    search_terms.append((package_id_normalized, "full_id", 100))
+
+            # If we ended up with no search terms, bail out
+            if not search_terms:
+                print(f"[InstallPath] No valid search terms could be generated")
+                return None
 
             print(f"[InstallPath] Search terms: {[term for term, _, _ in search_terms]}")
 
@@ -696,8 +756,16 @@ class WinPacManMainWindow(QMainWindow):
                                         for search_term, term_type, base_confidence in search_terms:
                                             confidence = 0
 
-                                            # Check registry subkey name first (often contains package ID)
-                                            if search_term == subkey_normalized:
+                                            # For ARP packages, try exact case-sensitive subkey match first
+                                            if term_type == "arp_subkey":
+                                                if search_term == subkey_name:
+                                                    confidence = base_confidence + 30  # Very high confidence
+                                                    match_reason = f"subkey_exact_arp"
+                                                elif search_term.lower() == subkey_name.lower():
+                                                    confidence = base_confidence + 20  # Case-insensitive exact
+                                                    match_reason = f"subkey_exact_arp_ci"
+                                            # Check registry subkey name (normalized)
+                                            elif search_term == subkey_normalized:
                                                 confidence = base_confidence + 20
                                                 match_reason = f"subkey_exact_{term_type}"
                                             elif search_term in subkey_normalized and len(search_term) > 3:
