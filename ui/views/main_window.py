@@ -682,8 +682,14 @@ class WinPacManMainWindow(QMainWindow):
                 (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", "HKCU"),
             ]
 
+            # For ARP packages, search the indicated hive first, then fall back to all hives
+            # (WinGet's ARP path might not always be accurate)
             if target_hive:
+                # Search target hive first
                 registry_paths = [(hkey, path) for hkey, path, hive in all_registry_paths if hive == target_hive]
+                # Then add other hives as fallback
+                registry_paths.extend([(hkey, path) for hkey, path, hive in all_registry_paths if hive != target_hive])
+                print(f"[InstallPath] Will search {target_hive} first, then other hives")
             else:
                 registry_paths = [(hkey, path) for hkey, path, _ in all_registry_paths]
 
@@ -872,39 +878,43 @@ class WinPacManMainWindow(QMainWindow):
                 print(f"[InstallPath] No candidates found in registry")
 
             # Fallback: Query WinGet directly for installation location
-            print(f"[InstallPath] Trying winget show as fallback...")
-            try:
-                result = subprocess.run(
-                    ['winget', 'show', '--id', package_id, '--accept-source-agreements'],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                    encoding='utf-8',
-                    errors='ignore'
-                )
+            # NOTE: Only works for WinGet-managed packages (not ARP entries)
+            if not package_id.startswith("ARP\\"):
+                print(f"[InstallPath] Trying winget show as fallback...")
+                try:
+                    result = subprocess.run(
+                        ['winget', 'show', '--id', package_id, '--accept-source-agreements'],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        encoding='utf-8',
+                        errors='ignore'
+                    )
 
-                if result.returncode == 0:
-                    # Parse output for "Install Location:" or "Installation Folder:"
-                    for line in result.stdout.splitlines():
-                        line_lower = line.lower().strip()
-                        if 'install location:' in line_lower or 'installation folder:' in line_lower:
-                            # Extract path after the colon
-                            parts = line.split(':', 1)
-                            if len(parts) == 2:
-                                install_path = parts[1].strip()
-                                if install_path and os.path.exists(install_path):
-                                    print(f"[InstallPath] ✓ Found via winget show: {install_path}")
-                                    return install_path
-                                else:
-                                    print(f"[InstallPath] Path from winget doesn't exist: {install_path}")
-                    print(f"[InstallPath] winget show returned no install location")
-                else:
-                    print(f"[InstallPath] winget show failed (exit code {result.returncode})")
+                    if result.returncode == 0:
+                        # Parse output for "Install Location:" or "Installation Folder:"
+                        for line in result.stdout.splitlines():
+                            line_lower = line.lower().strip()
+                            if 'install location:' in line_lower or 'installation folder:' in line_lower:
+                                # Extract path after the colon
+                                parts = line.split(':', 1)
+                                if len(parts) == 2:
+                                    install_path = parts[1].strip()
+                                    if install_path and os.path.exists(install_path):
+                                        print(f"[InstallPath] ✓ Found via winget show: {install_path}")
+                                        return install_path
+                                    else:
+                                        print(f"[InstallPath] Path from winget doesn't exist: {install_path}")
+                        print(f"[InstallPath] winget show returned no install location")
+                    else:
+                        print(f"[InstallPath] winget show failed (exit code {result.returncode})")
 
-            except subprocess.TimeoutExpired:
-                print(f"[InstallPath] winget show timed out")
-            except Exception as e:
-                print(f"[InstallPath] winget show error: {e}")
+                except subprocess.TimeoutExpired:
+                    print(f"[InstallPath] winget show timed out")
+                except Exception as e:
+                    print(f"[InstallPath] winget show error: {e}")
+            else:
+                print(f"[InstallPath] ARP packages don't support winget show, skipping fallback")
 
             return None
 
