@@ -756,22 +756,46 @@ class WinPacManMainWindow(QMainWindow):
                                         for search_term, term_type, base_confidence in search_terms:
                                             confidence = 0
 
-                                            # For ARP packages, try exact case-sensitive subkey match first
-                                            if term_type == "arp_subkey":
-                                                if search_term == subkey_name:
-                                                    confidence = base_confidence + 30  # Very high confidence
-                                                    match_reason = f"subkey_exact_arp"
-                                                elif search_term.lower() == subkey_name.lower():
-                                                    confidence = base_confidence + 20  # Case-insensitive exact
-                                                    match_reason = f"subkey_exact_arp_ci"
-                                            # Check registry subkey name (normalized)
+                                            # For ARP packages, check both subkey AND display name
+                                            if term_type in ["arp_subkey", "arp_normalized", "arp_base"]:
+                                                # Try exact subkey match (case-sensitive for arp_subkey)
+                                                if term_type == "arp_subkey":
+                                                    if search_term == subkey_name:
+                                                        confidence = base_confidence + 30
+                                                        match_reason = f"subkey_exact_arp"
+                                                    elif search_term.lower() == subkey_name.lower():
+                                                        confidence = base_confidence + 20
+                                                        match_reason = f"subkey_exact_arp_ci"
+                                                    # Also check display name for ARP exact match
+                                                    elif search_term == display_name:
+                                                        confidence = base_confidence + 25
+                                                        match_reason = f"display_exact_arp"
+                                                    elif search_term.lower() == display_name.lower():
+                                                        confidence = base_confidence + 15
+                                                        match_reason = f"display_exact_arp_ci"
+                                                else:
+                                                    # For normalized/base ARP terms, check normalized fields
+                                                    if search_term == subkey_normalized:
+                                                        confidence = base_confidence + 20
+                                                        match_reason = f"subkey_exact_{term_type}"
+                                                    elif search_term == display_normalized:
+                                                        confidence = base_confidence + 15
+                                                        match_reason = f"display_exact_{term_type}"
+                                                    elif display_normalized.startswith(search_term) and len(search_term) > 3:
+                                                        confidence = base_confidence + 5
+                                                        match_reason = f"display_starts_{term_type}"
+                                                    elif search_term in subkey_normalized and len(search_term) > 3:
+                                                        confidence = base_confidence
+                                                        match_reason = f"subkey_contains_{term_type}"
+
+                                            # Check registry subkey name (normalized) for non-ARP
                                             elif search_term == subkey_normalized:
                                                 confidence = base_confidence + 20
                                                 match_reason = f"subkey_exact_{term_type}"
                                             elif search_term in subkey_normalized and len(search_term) > 3:
                                                 confidence = base_confidence + 10
                                                 match_reason = f"subkey_contains_{term_type}"
-                                            # Check display name
+                                            # Check display name for non-ARP
                                             elif display_normalized == search_term:
                                                 confidence = base_confidence
                                                 match_reason = f"display_exact_{term_type}"
