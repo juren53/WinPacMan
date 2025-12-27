@@ -2,6 +2,116 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.0-alpha] - 2025-12-27
+
+### Major UX Improvement - Source Clarity (Installed vs Available Packages)
+
+**Issue:** Users were confused about whether they were viewing installed packages (local system) or available packages (remote repositories). No visual indication of package source led to unclear expectations.
+
+**Solution:** Implemented source toggle with clear visual indicators throughout the UI.
+
+### Added
+
+#### Source Toggle Control (`ui/views/main_window.py`)
+- **Radio button toggle** at top of window: "Installed" vs "Available"
+  - Defaults to "Available" (remote repository search)
+  - Tooltips explain each mode clearly
+  - Disabled during operations to prevent mode switching mid-operation
+
+#### Clear Status Messages
+- **Status bar** now shows: "Viewing: Available packages - WinGet" or "Viewing: Installed packages - WinGet"
+- **Search placeholder** updates dynamically: "Search available packages..." or "Search installed packages..."
+- **Progress messages** clarify source: "Loading installed packages from WinGet..."
+
+#### Tab-Based Repository Selection
+- **Replaced dropdown + checkboxes** with clean tab interface
+  - Tabs: "All Packages", "WinGet", "Chocolatey"
+  - Shows package counts in tab labels (e.g., "WinGet (8,398)")
+  - Scales cleanly for future package managers (Scoop, Pip, NPM, Cargo, etc.)
+  - Clear visual hierarchy
+
+#### Smart Behavior Per Source
+- **Available Mode (default):**
+  - Search → Queries metadata cache (instant results)
+  - Refresh → Shows info dialog (cache doesn't need manual refresh)
+
+- **Installed Mode:**
+  - Search → Filters already-loaded installed packages locally (instant)
+  - Refresh → Calls package manager to list installed packages
+
+#### View Menu Reorganization
+- **Moved "Verbose Output"** from control panel checkbox to View menu
+  - Checkable menu item with tooltip
+  - Cleaner control panel layout
+  - Professional menu organization
+
+### Fixed
+
+#### Tab Selector Bug
+- **Issue:** Tab labels included package counts (e.g., "WinGet (8,398)"), breaking dictionary lookups
+- **Solution:** Changed to index-based lookup instead of text-based lookup
+- **Impact:** All tabs now correctly filter packages by selected repository
+
+### Changed
+
+#### UI Architecture (`ui/views/main_window.py`)
+- Added `current_source` state variable ('installed' or 'available')
+- Created `create_source_toggle()` method for source radio buttons
+- Added `on_source_changed()` handler to update UI state
+- Updated `on_tab_changed()` to include source context in status
+- Modified `search_packages()` to route to appropriate search method based on source
+- Added `_search_installed_packages()` for local filtering of installed packages
+- Updated `refresh_packages()` to handle source-specific behavior
+- Enhanced `disable_controls()` and `enable_controls()` to manage source toggle
+
+---
+
+### Planned - Installed Packages Metadata Cache Architecture
+
+**Status:** Planning (see `PLAN_Installed_Packages_Cache.md`)
+
+**Vision:** Treat installed packages with the same metadata cache approach as available packages, maintaining the core principle: **"A common data structure for all packages."**
+
+#### Proposed Architecture
+
+**Current Issue:**
+- Available packages: Cached in SQLite, fast search, cross-manager aggregation ✅
+- Installed packages: Queried via shell commands, slow, single-manager only ❌
+- "All Packages" + "Installed" only shows WinGet (no unified aggregation) ❌
+
+**Proposed Solution:**
+- Add `is_installed` flag to existing `packages` table in metadata cache
+- Store installed state alongside available package metadata
+- Query SQLite instead of invoking package managers repeatedly
+- Enable instant cross-manager aggregation with single query
+
+#### Key Benefits
+
+1. **Consistency** - Same `Package` model, same cache, same search logic for both sources
+2. **Performance** - SQLite queries (< 1 second) vs shell commands (5-10 seconds)
+3. **Cross-Manager Aggregation** - "All Packages" + "Installed" shows packages from all managers with one query: `SELECT * FROM packages WHERE is_installed = 1`
+4. **Rich Metadata** - Can detect updates by comparing `installed_version` vs `version` (available)
+5. **Offline Capability** - View installed packages without network or package manager availability
+
+#### Implementation Phases (4-6 hours estimated)
+
+1. **Database Schema Extension** - Add `is_installed`, `installed_version`, `install_date` columns
+2. **Installed Packages Providers** - Create `InstalledPackagesProvider` classes for each manager
+3. **Cache Service Extensions** - Add `sync_installed_packages()` and `get_installed_packages()` methods
+4. **UI Integration** - Update refresh logic to use cache queries instead of shell commands
+5. **Auto-Refresh & Optimization** - Background sync on startup, staleness detection
+
+#### Future Enhancements
+
+- **Update Detection** - Compare `installed_version` vs `version` to show "Update Available" badge
+- **Installation History** - Track when packages were installed/uninstalled
+- **Dependency Tracking** - Store and visualize package dependencies
+- **Portable Mode** - Export/import installed package lists for new machine setup
+
+**Full Plan:** See `PLAN_Installed_Packages_Cache.md` for complete architecture, code examples, migration strategy, and risk analysis.
+
+---
+
 ## [0.4.1b] - 2025-12-27 11:30
 
 ### Fixed - Cross-Repository Search UI
