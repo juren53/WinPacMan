@@ -656,10 +656,24 @@ class WinPacManMainWindow(QMainWindow):
                     match = re.search(r'^"?([A-Z]:[^"]+?)\\[^\\]+\.exe', uninstall_string, re.IGNORECASE)
                     if match:
                         path = match.group(1)
-                        # Go up one or two directories to find the base install folder
-                        parent = os.path.dirname(path)
-                        if parent and os.path.exists(parent):
-                            return parent
+
+                        # Decide whether to use path or parent directory
+                        # Check if path looks like a versioned subdirectory (e.g., "vim91", "v1.2.3")
+                        path_basename = os.path.basename(path).lower()
+
+                        # Patterns that indicate a versioned subdirectory
+                        is_version_subdir = (
+                            re.search(r'(^|[^a-z])(v?\d+\.?\d*|bin|app|x64|x86|win\d+)$', path_basename) or
+                            'uninstall' in path_basename
+                        )
+
+                        if is_version_subdir:
+                            # Use parent directory for versioned subdirs (e.g., vim91 -> Vim)
+                            parent = os.path.dirname(path)
+                            if parent and os.path.exists(parent):
+                                return parent
+
+                        # Use the extracted path itself
                         if path and os.path.exists(path):
                             return path
             except FileNotFoundError:
@@ -672,9 +686,20 @@ class WinPacManMainWindow(QMainWindow):
                     match = re.search(r'^"?([A-Z]:[^"]+?)\\[^\\]+\.exe', install_string, re.IGNORECASE)
                     if match:
                         path = match.group(1)
-                        parent = os.path.dirname(path)
-                        if parent and os.path.exists(parent):
-                            return parent
+                        path_basename = os.path.basename(path).lower()
+
+                        # Check if path looks like a versioned subdirectory
+                        is_version_subdir = (
+                            re.search(r'(^|[^a-z])(v?\d+\.?\d*|bin|app|x64|x86|win\d+)$', path_basename) or
+                            'uninstall' in path_basename or
+                            'install' in path_basename
+                        )
+
+                        if is_version_subdir:
+                            parent = os.path.dirname(path)
+                            if parent and os.path.exists(parent):
+                                return parent
+
                         if path and os.path.exists(path):
                             return path
             except FileNotFoundError:
