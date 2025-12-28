@@ -70,7 +70,6 @@ class WinGetProvider(MetadataProvider):
             LEFT JOIN norm_publishers_map ON manifest.rowid = norm_publishers_map.manifest
             LEFT JOIN norm_publishers ON norm_publishers_map.norm_publisher = norm_publishers.rowid
             ORDER BY manifest.rowid
-            LIMIT 10000
             """
 
             cursor.execute(query)

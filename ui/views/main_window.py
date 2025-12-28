@@ -24,7 +24,7 @@ from ui.workers.package_worker import (
     PackageInstallWorker,
     PackageUninstallWorker
 )
-from metadata import MetadataCacheService, WinGetProvider
+from metadata import MetadataCacheService, WinGetProvider, ScoopProvider
 from core.config import config_manager
 from ui.components.package_table import PackageTableWidget
 
@@ -61,6 +61,10 @@ class WinPacManMainWindow(QMainWindow):
         # Register WinGet provider
         winget_provider = WinGetProvider()
         self.metadata_cache.register_provider(winget_provider)
+
+        # Register Scoop provider
+        scoop_provider = ScoopProvider()
+        self.metadata_cache.register_provider(scoop_provider)
 
         # State
         self.current_packages: List[Package] = []
@@ -171,12 +175,12 @@ class WinPacManMainWindow(QMainWindow):
         self.repo_tabs.setMaximumHeight(40)
 
         # Define available repositories
-        # Future: Add more tabs as providers are implemented (Scoop, Pip, NPM, etc.)
+        # Future: Add more tabs as providers are implemented (Pip, NPM, etc.)
         self.tab_managers = {
             'All Packages': None,  # None means all managers
             'WinGet': ['winget'],
             'Chocolatey': ['chocolatey'],
-            # 'Scoop': ['scoop'],  # Future
+            'Scoop': ['scoop'],
             # 'Pip': ['pip'],  # Future
             # 'NPM': ['npm'],  # Future
         }
@@ -202,7 +206,8 @@ class WinPacManMainWindow(QMainWindow):
             # Get counts for each manager
             winget_count = self.metadata_cache.get_package_count('winget')
             choco_count = self.metadata_cache.get_package_count('chocolatey')
-            total_count = winget_count + choco_count
+            scoop_count = self.metadata_cache.get_package_count('scoop')
+            total_count = winget_count + choco_count + scoop_count
 
             # Update tab labels
             for i in range(self.repo_tabs.count()):
@@ -213,6 +218,8 @@ class WinPacManMainWindow(QMainWindow):
                     label = f"WinGet ({winget_count:,})" if winget_count > 0 else "WinGet"
                 elif tab_name == 'Chocolatey':
                     label = f"Chocolatey ({choco_count:,})" if choco_count > 0 else "Chocolatey"
+                elif tab_name == 'Scoop':
+                    label = f"Scoop ({scoop_count:,})" if scoop_count > 0 else "Scoop"
                 else:
                     label = tab_name
 
@@ -306,6 +313,10 @@ class WinPacManMainWindow(QMainWindow):
         view_config_action.triggered.connect(self.show_configuration)
         config_menu.addAction(view_config_action)
 
+        refresh_cache_action = QAction("&Refresh Metadata Cache", self)
+        refresh_cache_action.triggered.connect(self.refresh_metadata_cache)
+        config_menu.addAction(refresh_cache_action)
+
         # View menu
         view_menu = menubar.addMenu("&View")
         self.verbose_action = QAction("&Verbose Output", self)
@@ -315,12 +326,42 @@ class WinPacManMainWindow(QMainWindow):
         self.verbose_action.triggered.connect(self.on_verbose_toggled)
         view_menu.addAction(self.verbose_action)
 
+        cache_summary_action = QAction("&Cache Summary", self)
+        cache_summary_action.triggered.connect(self.show_cache_summary)
+        view_menu.addAction(cache_summary_action)
+
         # Help menu
         help_menu = menubar.addMenu("&Help")
 
         user_guide_action = QAction("&User Guide", self)
         user_guide_action.triggered.connect(self.show_user_guide)
         help_menu.addAction(user_guide_action)
+        
+
+    def show_cache_summary(self):
+        """Show a dialog with a summary of the package cache."""
+        total_count = self.metadata_cache.get_package_count()
+        winget_count = self.metadata_cache.get_package_count('winget')
+        chocolatey_count = self.metadata_cache.get_package_count('chocolatey')
+        scoop_count = self.metadata_cache.get_package_count('scoop')
+
+        summary_text = f"""
+        <h2>Package Cache Summary</h2>
+        <p><b>Total Packages:</b> {total_count:,}</p>
+        <hr>
+        <h4>Breakdown by Provider:</h4>
+        <ul>
+            <li><b>WinGet:</b> {winget_count:,} packages</li>
+            <li><b>Chocolatey:</b> {chocolatey_count:,} packages</li>
+            <li><b>Scoop:</b> {scoop_count:,} packages</li>
+        </ul>
+        """
+
+        QMessageBox.information(
+            self,
+            "Cache Summary",
+            summary_text
+        )
 
         changelog_action = QAction("&Change Log", self)
         changelog_action.triggered.connect(self.show_changelog)
@@ -607,15 +648,16 @@ class WinPacManMainWindow(QMainWindow):
         QApplication.processEvents()  # Update UI
 
         try:
-            self.metadata_cache.refresh_cache(manager='winget', force=True)
+            for provider in self.metadata_cache.providers:
+                self.metadata_cache.refresh_cache(manager=provider.get_manager_name(), force=True)
 
-            cache_count = self.metadata_cache.get_package_count('winget')
-            self.status_label.setText(f"Cache refreshed: {cache_count} packages indexed")
+            total_count = self.metadata_cache.get_package_count()
+            self.status_label.setText(f"Cache refreshed: {total_count} packages indexed")
 
             QMessageBox.information(
                 self,
                 "Cache Refreshed",
-                f"Successfully cached {cache_count} packages from WinGet."
+                f"Successfully cached {total_count} packages."
             )
 
         except Exception as e:

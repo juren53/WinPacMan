@@ -2,6 +2,24 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.1d] - 2025-12-27
+
+### Added
+- **Scoop Integration**:
+    - Added a `ScoopProvider` to fetch available Scoop packages by reading local bucket manifests.
+    - Integrated Scoop into the UI with a dedicated "Scoop" tab.
+- **Cache Summary**:
+    - Added a "Cache Summary" item to the "View" menu to display a breakdown of cached packages by provider.
+- **Explicit Cache Refresh**:
+    - Added a "Refresh Metadata Cache" item to the "Config" menu to allow users to force a full refresh of all package data.
+
+### Fixed
+- **Scoop Provider Bug**: Fixed a database error caused by the `license` field in some Scoop manifests being a dictionary instead of a string.
+- **WinGet Refresh**: The cache refresh logic now performs a full refresh for WinGet, fetching all available packages from the remote source.
+- **Import Error**: Fixed an `ImportError` for the `ScoopProvider`.
+
+---
+
 ## [0.5.1c] - 2025-12-27
 
 ### Maintenance Release - Version Bump and Documentation Update

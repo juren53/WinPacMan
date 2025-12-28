@@ -200,7 +200,14 @@ class MetadataCacheService:
 
             # Insert new metadata
             count = 0
-            for package in provider.get_available_packages():
+            
+            packages_iterator = None
+            if hasattr(provider, 'fetch_all_packages'):
+                packages_iterator = provider.fetch_all_packages()
+            else:
+                packages_iterator = provider.get_available_packages()
+
+            for package in packages_iterator:
                 self._insert_package(package)
                 count += 1
 

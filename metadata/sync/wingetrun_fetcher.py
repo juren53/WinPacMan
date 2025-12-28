@@ -83,49 +83,61 @@ class WinGetRunFetcher:
 
     def fetch_all_packages(self, progress_callback=None) -> Iterator[Dict[str, Any]]:
         """
-        Fetch all packages with metadata.
-
+        Fetch all packages with metadata, handling pagination.
         Args:
             progress_callback: Optional callback(current, total, message)
-
         Yields:
             Package metadata dictionaries
         """
         print("[WinGetRun] Fetching all packages...")
+        page = 0
+        take = 100  # Number of items per page
+        total_fetched = 0
+        total_packages = -1  # Unknown at first
 
-        try:
-            # Fetch the complete package list with metadata
-            response = self.session.get(self.PACKAGES_ENDPOINT, timeout=60)
+        while True:
+            try:
+                # Fetch a page of packages
+                url = f"{self.PACKAGES_ENDPOINT}?page={page}&take={take}"
+                response = self.session.get(url, timeout=60)
 
-            if response.status_code != 200:
-                print(f"[WinGetRun] Request failed: {response.status_code}")
-                return
+                if response.status_code != 200:
+                    print(f"[WinGetRun] Request failed: {response.status_code}")
+                    break
 
-            data = response.json()
+                data = response.json()
 
-            # Response format: {"Packages": [...]}
-            if isinstance(data, dict) and 'Packages' in data:
-                packages = data['Packages']
-            elif isinstance(data, list):
-                packages = data
-            else:
-                print(f"[WinGetRun] Unexpected response format: {type(data)}")
-                return
+                if total_packages == -1:
+                    total_packages = data.get('Total', 0)
+                if total_packages > 0:
+                    print(f"[WinGetRun] Found {total_packages} packages in total.")
 
-            total = len(packages)
-            print(f"[WinGetRun] Processing {total} packages...")
 
-            for i, pkg in enumerate(packages, 1):
-                if progress_callback and i % 100 == 0:
-                    progress_callback(i, total, f"Processing package {i}/{total}")
+                # Response format: {"Packages": [...], "Total": ...}
+                if isinstance(data, dict) and 'Packages' in data:
+                    packages = data['Packages']
+                else:
+                    print(f"[WinGetRun] Unexpected response format: {type(data)}")
+                    break
 
-                # Parse package data
-                parsed = self.parse_package_data(pkg)
-                if parsed:
-                    yield parsed
+                if not packages:  # No more packages
+                    break
 
-        except requests.RequestException as e:
-            print(f"[WinGetRun] Error fetching packages: {e}")
+                if total_packages > 0 and progress_callback:
+                    progress_callback(total_fetched, total_packages, f"Fetched {total_fetched}/{total_packages} packages")
+
+                for pkg in packages:
+                    # Parse package data
+                    parsed = self.parse_package_data(pkg)
+                    if parsed:
+                        yield parsed
+
+                total_fetched += len(packages)
+                page += 1
+
+            except requests.RequestException as e:
+                print(f"[WinGetRun] Error fetching packages: {e}")
+                break
 
     def parse_package_data(self, pkg_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
