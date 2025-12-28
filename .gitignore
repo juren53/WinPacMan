@@ -196,3 +196,4 @@ winpacman_env/
 winpacman_env_windows/
 cache/
 logs/
+nul

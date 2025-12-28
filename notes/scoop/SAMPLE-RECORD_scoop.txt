@@ -1,0 +1,12 @@
+
+Name        : youtube-dl
+Description : Download videos from YouTube.com (and a few more sites) using command line.
+Version     : 2021.12.17
+Source      : main
+Website     : https://github.com/ytdl-org/youtube-dl
+License     : Unlicense
+Updated at  : 9/23/2024 12:07:40 PM
+Updated by  : jimur
+Binaries    : youtube-dl.exe
+Suggestions : ffmpeg | extras/vcredist2010
+

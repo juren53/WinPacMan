@@ -9,7 +9,8 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QMessageBox, QPushButton, QComboBox, QStatusBar, QApplication,
     QInputDialog, QDialog, QDialogButtonBox, QCheckBox, QTextEdit,
-    QMenuBar, QMenu, QLineEdit, QTabWidget, QRadioButton, QButtonGroup
+    QMenuBar, QMenu, QLineEdit, QTabWidget, QRadioButton, QButtonGroup,
+    QTextBrowser
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont, QAction
@@ -26,6 +27,13 @@ from ui.workers.package_worker import (
 from metadata import MetadataCacheService, WinGetProvider
 from core.config import config_manager
 from ui.components.package_table import PackageTableWidget
+
+# Markdown rendering imports
+import markdown
+from markdown.extensions import fenced_code, tables, nl2br, sane_lists
+from pygments.formatters import HtmlFormatter
+import os
+import re
 
 
 class WinPacManMainWindow(QMainWindow):
@@ -317,6 +325,10 @@ class WinPacManMainWindow(QMainWindow):
         changelog_action = QAction("&Change Log", self)
         changelog_action.triggered.connect(self.show_changelog)
         help_menu.addAction(changelog_action)
+
+        shortcuts_action = QAction("&Keyboard Shortcuts", self)
+        shortcuts_action.triggered.connect(self.show_keyboard_shortcuts)
+        help_menu.addAction(shortcuts_action)
 
         help_menu.addSeparator()
 
@@ -1508,54 +1520,98 @@ class WinPacManMainWindow(QMainWindow):
             self.uninstall_btn.setEnabled(True)
 
     def show_user_guide(self):
-        """Show user guide (placeholder)."""
-        QMessageBox.information(
-            self,
-            "User Guide",
-            "User Guide - Coming Soon\n\n"
-            "Comprehensive documentation will be available in a future release.\n\n"
-            "For now, please refer to the README.md and CLAUDE.md files in the project repository."
-        )
+        """Show user guide dialog with rendered markdown."""
+        user_guide_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'docs', 'user-guide.md')
+        
+        try:
+            with open(user_guide_path, 'r', encoding='utf-8', errors='replace') as f:
+                markdown_content = f.read()
+        except Exception as e:
+            markdown_content = f"""# WinPacMan User Guide
+            
+Unable to load user guide file.
+
+Error: {str(e)}
+
+Please check docs/user-guide.md file in WinPacMan repository.
+
+For now, please refer to README.md and CLAUDE.md files in project repository."""
+        
+        # Convert markdown to HTML
+        html_content = self.render_markdown_to_html(markdown_content)
+        
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("WinPacMan User Guide")
+        dialog.setModal(True)
+        dialog.resize(1000, 750)
+        
+        # Use QTextBrowser for HTML rendering
+        text_browser = QTextBrowser()
+        text_browser.setReadOnly(True)
+        text_browser.setOpenExternalLinks(True)  # Allow clicking links
+        text_browser.setHtml(html_content)
+        text_browser.setStyleSheet("QTextBrowser { border: none; }")
+        
+        # Close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(dialog.accept)
+        
+        # Layout
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(text_browser)
+        
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(close_button)
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+        
+        dialog.exec()
 
     def show_changelog(self):
-        """Display CHANGELOG.md in a dialog."""
-        import os
-
-        # Find CHANGELOG.md in project root
+        """Display CHANGELOG.md with rendered markdown."""
         changelog_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "CHANGELOG.md")
-
+        
         if not os.path.exists(changelog_path):
             QMessageBox.warning(self, "Change Log", "CHANGELOG.md file not found.")
             return
-
-        # Read changelog
+        
         try:
-            with open(changelog_path, 'r', encoding='utf-8') as f:
-                changelog_content = f.read()
+            with open(changelog_path, 'r', encoding='utf-8', errors='replace') as f:
+                markdown_content = f.read()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to read CHANGELOG.md:\n{str(e)}")
-            return
+            markdown_content = f"""# Change Log
+            
+Unable to load CHANGELOG.md file.
 
+Error: {str(e)}"""
+        
+        # Convert markdown to HTML
+        html_content = self.render_markdown_to_html(markdown_content)
+        
         # Create dialog
         dialog = QDialog(self)
-        dialog.setWindowTitle("Change Log")
-        dialog.setMinimumWidth(800)
-        dialog.setMinimumHeight(600)
-
-        layout = QVBoxLayout(dialog)
-
-        # Changelog content
-        changelog_display = QTextEdit()
-        changelog_display.setReadOnly(True)
-        changelog_display.setPlainText(changelog_content)
-        changelog_display.setStyleSheet("font-family: 'Consolas', 'Courier New', monospace;")
-        layout.addWidget(changelog_display)
-
+        dialog.setWindowTitle("WinPacMan Change Log")
+        dialog.setModal(True)
+        dialog.resize(900, 700)
+        
+        # Use QTextBrowser for HTML rendering
+        text_browser = QTextBrowser()
+        text_browser.setReadOnly(True)
+        text_browser.setOpenExternalLinks(True)
+        text_browser.setHtml(html_content)
+        text_browser.setStyleSheet("QTextBrowser { border: none; }")
+        
         # Close button
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         button_box.rejected.connect(dialog.reject)
+        
+        # Layout
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(text_browser)
         layout.addWidget(button_box)
-
+        
         dialog.exec()
 
     def show_about(self):
@@ -1599,6 +1655,67 @@ class WinPacManMainWindow(QMainWindow):
 """
 
         QMessageBox.about(self, "About WinPacMan", about_text)
+
+    def show_keyboard_shortcuts(self):
+        """Show keyboard shortcuts dialog with rendered markdown."""
+        shortcuts_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'docs', 'keyboard-shortcuts.md')
+        
+        try:
+            with open(shortcuts_path, 'r', encoding='utf-8', errors='replace') as f:
+                markdown_content = f.read()
+        except Exception as e:
+            # Fallback to embedded content
+            markdown_content = f"""# WinPacMan Keyboard Shortcuts
+            
+Unable to load keyboard shortcuts file.
+
+Error: {str(e)}
+
+## Application Shortcuts
+- **Ctrl+Q**: Exit WinPacMan
+- **F5**: Refresh package list
+- **Tab**: Switch between Installed/Available tabs
+
+## Navigation
+- **↑/↓ Arrow Keys**: Navigate package list
+- **Enter**: Install/Uninstall selected package
+- **Escape**: Close current dialog
+
+## Search
+- **Ctrl+F**: Focus search box
+- **Ctrl+L**: Clear search"""
+        
+        # Convert markdown to HTML
+        html_content = self.render_markdown_to_html(markdown_content)
+        
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("WinPacMan Keyboard Shortcuts")
+        dialog.setModal(True)
+        dialog.resize(800, 650)
+        
+        # Use QTextBrowser for HTML rendering
+        text_browser = QTextBrowser()
+        text_browser.setReadOnly(True)
+        text_browser.setOpenExternalLinks(True)
+        text_browser.setHtml(html_content)
+        text_browser.setStyleSheet("QTextBrowser { border: none; }")
+        
+        # Close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(dialog.accept)
+        
+        # Layout
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(text_browser)
+        
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(close_button)
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+        
+        dialog.exec()
 
     def show_configuration(self):
         """Show configuration file in read-only dialog."""
@@ -1707,8 +1824,222 @@ class WinPacManMainWindow(QMainWindow):
                 QPushButton:hover {
                     background-color: #1984d8;
                 }
-                QPushButton:disabled {
+QPushButton:disabled {
                     background-color: #cccccc;
                     color: #666666;
                 }
             """)
+
+    # Markdown Help System Methods
+    def get_dialog_theme_colors(self) -> dict:
+        """Get theme-appropriate colors for dialogs."""
+        # Check if dark theme (implementation needed based on Qt palette)
+        palette = self.palette()
+        bg_color = palette.color(palette.ColorRole.Window)
+        bg_brightness = (bg_color.red() + bg_color.green() + bg_color.blue()) / 3
+        is_dark_theme = bg_brightness < 128
+        
+        if is_dark_theme:
+            return {
+                'background': '#1e1e1e',
+                'text': '#c8c8c8',
+                'selection_bg': '#0078d7',
+                'selection_text': 'white'
+            }
+        else:
+            return {
+                'background': '#f8f9fa', 
+                'text': '#212529',
+                'selection_bg': '#0078d7',
+                'selection_text': 'white'
+            }
+
+    def is_dark_theme(self) -> bool:
+        """Check if application is using dark theme."""
+        palette = self.palette()
+        bg_color = palette.color(palette.ColorRole.Window)
+        return bg_color.lightness() < 128
+
+    def render_markdown_to_html(self, markdown_text: str) -> str:
+        """
+        Convert markdown text to GitHub-style HTML with syntax highlighting.
+        
+        Args:
+            markdown_text: Raw markdown content as string
+            
+        Returns:
+            Fully styled HTML string with CSS
+        """
+        # Get theme colors for styling
+        theme_colors = self.get_dialog_theme_colors()
+        
+        # Configure markdown extensions (GitHub-flavored)
+        extensions = [
+            'fenced_code',      # ```code blocks```
+            'tables',           # GitHub markdown tables
+            'nl2br',            # Convert newlines to <br>
+            'sane_lists',       # Better list handling
+            'codehilite',       # Syntax highlighting
+            'toc',              # Table of contents support
+        ]
+        
+        # Configure extension settings
+        extension_configs = {
+            'codehilite': {
+                'css_class': 'highlight',
+                'linenums': False,
+                'guess_lang': True
+            }
+        }
+        
+        # Convert markdown to HTML
+        md = markdown.Markdown(
+            extensions=extensions,
+            extension_configs=extension_configs
+        )
+        html_content = md.convert(markdown_text)
+        
+        # Get Pygments CSS for syntax highlighting
+        formatter = HtmlFormatter(style='github-dark' if self.is_dark_theme() else 'github')
+        pygments_css = formatter.get_style_defs('.highlight')
+        
+        # Build complete HTML document with GitHub-style CSS
+        full_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        /* Base styles */
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica', 'Arial', sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: {theme_colors['text']};
+            background-color: {theme_colors['background']};
+            padding: 16px;
+            margin: 0;
+        }}
+        
+        /* Headers */
+        h1, h2, h3, h4, h5, h6 {{
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.25;
+            border-bottom: 1px solid {'#30363d' if self.is_dark_theme() else '#d8dee4'};
+            padding-bottom: 8px;
+        }}
+        
+        h1 {{ font-size: 2em; }}
+        h2 {{ font-size: 1.5em; }}
+        h3 {{ font-size: 1.25em; }}
+        
+        /* Paragraphs and text */
+        p {{ margin-top: 0; margin-bottom: 16px; }}
+        
+        strong {{ font-weight: 600; }}
+        em {{ font-style: italic; }}
+        
+        /* Links */
+        a {{
+            color: #58a6ff;
+            text-decoration: none;
+        }}
+        a:hover {{
+            text-decoration: underline;
+        }}
+        
+        /* Lists */
+        ul, ol {{
+            margin-top: 0;
+            margin-bottom: 16px;
+            padding-left: 2em;
+        }}
+        
+        li {{ margin-top: 0.25em; }}
+        
+        /* Code */
+        code {{
+            padding: 0.2em 0.4em;
+            margin: 0;
+            font-size: 85%;
+            background-color: {'rgba(110,118,129,0.4)' if self.is_dark_theme() else 'rgba(175,184,193,0.2)'};
+            border-radius: 6px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }}
+        
+        /* Code blocks */
+        pre {{
+            padding: 16px;
+            overflow: auto;
+            font-size: 85%;
+            line-height: 1.45;
+            background-color: {'#161b22' if self.is_dark_theme() else '#f6f8fa'};
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }}
+        
+        pre code {{
+            display: inline;
+            padding: 0;
+            margin: 0;
+            overflow: visible;
+            line-height: inherit;
+            background-color: transparent;
+            border: 0;
+        }}
+        
+        /* Tables */
+        table {{
+            border-spacing: 0;
+            border-collapse: collapse;
+            margin-top: 0;
+            margin-bottom: 16px;
+            width: 100%;
+        }}
+        
+        table th {{
+            font-weight: 600;
+            padding: 6px 13px;
+            border: 1px solid {'#30363d' if self.is_dark_theme() else '#d0d7de'};
+            background-color: {'#161b22' if self.is_dark_theme() else '#f6f8fa'};
+        }}
+        
+        table td {{
+            padding: 6px 13px;
+            border: 1px solid {'#30363d' if self.is_dark_theme() else '#d0d7de'};
+        }}
+        
+        table tr:nth-child(2n) {{
+            background-color: {'#0d1117' if self.is_dark_theme() else '#f6f8fa'};
+        }}
+        
+        /* Blockquotes */
+        blockquote {{
+            padding: 0 1em;
+            color: {'#8b949e' if self.is_dark_theme() else '#57606a'};
+            border-left: 0.25em solid {'#30363d' if self.is_dark_theme() else '#d0d7de'};
+            margin: 0 0 16px 0;
+        }}
+        
+        /* Horizontal rules */
+        hr {{
+            height: 0.25em;
+            padding: 0;
+            margin: 24px 0;
+            background-color: {'#30363d' if self.is_dark_theme() else '#d0d7de'};
+            border: 0;
+        }}
+        
+        /* Pygments syntax highlighting */
+        {pygments_css}
+    </style>
+</head>
+<body>
+{html_content}
+</body>
+</html>
+"""
+        
+        return full_html

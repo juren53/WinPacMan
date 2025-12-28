@@ -5,10 +5,12 @@ A modern Python PyQt6-based Windows package manager that provides a unified inte
 ## Features
 
 - Unified interface for multiple Windows package managers (WinGet, Chocolatey, Pip, NPM)
-- Modern Windows 11-style UI with enhanced progress tracking
+- Modern GUI interface 
 - Modular architecture for easy extensibility
 - XDG-compliant configuration management
 - Threading for non-blocking operations
+
+![WinPacMan Main UI](scrn-caps/SCRN-CAP_WPM-main-UI.png)
 
 ## Supported Package Managers
 

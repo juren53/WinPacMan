@@ -6,6 +6,7 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
 
 ### Maintenance Release - Version Bump and Documentation Update
 
+- Help system additions/edits [ cut short due to circular indent syndrome ]
 - Updated version to v0.5.1c for release coordination
 - Prepared changelog for version tagging
 - Maintained all existing functionality from v0.5.1b
@@ -21,6 +22,7 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
 ### Added
 
 #### Smart Manager Resolution System
+
 - **`metadata_cache.get_manager_for_package()`** - Query available packages cache to resolve managers
   - Exact package_id match (case-sensitive)
   - Case-insensitive package_id fallback
@@ -28,6 +30,7 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
   - Returns manager name or None if not in repos
 
 #### Enhanced Package Conversion
+
 - **`UniversalPackageMetadata.to_package(cache_service=None)`** - Automatic manager resolution
   - Accepts optional cache_service parameter for smart resolution
   - UNKNOWN packages automatically resolved via cache lookup
@@ -35,12 +38,15 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
   - Only applies to installed packages (is_installed=True)
 
 #### Unified UI Display
+
 - **Manager Column Behavior:**
+  
   - **Installed mode:** All packages display "Installed" in Manager column
   - **Available mode:** Shows repository name (WinGet, Chocolatey, etc.)
   - Clear distinction between viewing modes
 
 - **Package Details Dialog:**
+  
   - **Installed packages:** Shows "Status: Installed" + "Source: [WinGet/Chocolatey/Scoop/MS Store/Unknown]"
   - **Available packages:** Shows "Manager: [repository]" as before
   - Source information preserved in details
@@ -48,6 +54,7 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
 ### Fixed
 
 #### Critical Uninstall Bug
+
 - **Issue:** Installed packages with "unknown" manager couldn't be uninstalled
   - Example: Neo Cowsay installed via WinGet, but registry fingerprinting said "unknown"
   - Uninstall failed: "Package manager 'unknown' is not available"
@@ -57,6 +64,7 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
 - **Impact:** Uninstall now works for packages where fingerprinting failed ✅
 
 #### Unicode Encoding Errors
+
 - **Issue:** Python console output crashed with UnicodeEncodeError on Windows
   - Characters: `✓` `✗` `→` couldn't be encoded by cp1252 codec
   - Affected debug output and verbose mode dialogs
@@ -70,6 +78,7 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
 ### Changed
 
 #### UI/UX Improvements
+
 - **Manager Column:** Context-aware display (Installed vs Available mode)
 - **Details Dialog:** Different layouts for installed vs available packages
 - **Cache Integration:** All package conversions now use cache service for smart resolution
@@ -77,6 +86,7 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
 ### Validated
 
 #### Smart Resolution Test Results
+
 - ✅ **30 packages resolved** from "unknown" to correct manager (21% of installed packages)
 - ✅ **WinGet resolved:** 11 packages (Claude Code, Neo Cowsay, TechPowerUp GPU-Z, etc.)
 - ✅ **Chocolatey resolved:** 19 packages (Git, VLC, Brave, Google Chrome, FFmpeg, etc.)
@@ -85,6 +95,7 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
 - ✅ **No Unicode errors:** All debug output displays correctly
 
 #### Performance Impact
+
 - Smart resolution adds minimal overhead (<1ms per package)
 - Cache queries are indexed and fast
 - Total refresh time remains under 2 seconds
@@ -92,12 +103,14 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
 ### Technical Details
 
 **Files Modified:**
+
 - `ui/components/package_table.py` - Manager column display logic
 - `ui/views/main_window.py` - Details dialog, cache service integration, Unicode fixes
 - `core/models.py` - Smart manager resolution in to_package()
 - `metadata/metadata_cache.py` - get_manager_for_package() method
 
 **Resolution Algorithm:**
+
 ```python
 if manager == UNKNOWN and is_installed:
     repo_manager = cache.get_manager_for_package(package_id, name)
@@ -129,6 +142,7 @@ if manager == UNKNOWN and is_installed:
 **Achievement:** Implemented Windows Registry scanning for installed package detection with **10-20x performance improvement** over shell command approach.
 
 **Performance Results:**
+
 - **Registry scan speed:** 1-2 seconds (vs 11-20 seconds for shell commands)
 - **Total packages found:** 143 packages (138 from registry + 5 from Scoop)
 - **Detection accuracy:** Fingerprint-based manager identification
@@ -137,6 +151,7 @@ if manager == UNKNOWN and is_installed:
 ### Added
 
 #### Registry-Based Package Discovery
+
 - **`metadata/providers/installed_registry_provider.py`** - Fast installed packages provider
   - `InstalledRegistryProvider` class for Windows Registry scanning
   - Scans three registry hives: HKLM, HKLM WOW6432Node, HKCU
@@ -145,6 +160,7 @@ if manager == UNKNOWN and is_installed:
   - Performance: ~1-2 seconds for complete system scan
 
 #### Scoop-Specific Provider
+
 - **`ScoopInstalledProvider`** class in `installed_registry_provider.py`
   - Scoop doesn't use Windows Registry (portable design)
   - Scans `%USERPROFILE%\scoop\apps` directory structure
@@ -152,7 +168,9 @@ if manager == UNKNOWN and is_installed:
   - Detects packages via `current` symlink
 
 #### Fingerprint Detection Strategy
+
 Detection rules (in priority order):
+
 1. **WinGet:** InstallSource contains "winget" or "appinstaller"
 2. **Chocolatey:** InstallLocation/InstallSource contains "chocolatey" or "choco"
 3. **Scoop:** InstallLocation contains "scoop"
@@ -160,6 +178,7 @@ Detection rules (in priority order):
 5. **Unknown:** No fingerprint detected (per user requirement)
 
 #### Database Schema Extensions
+
 - **`metadata/metadata_cache.py`** - Extended for installed package tracking
   - Added columns: `installed_version`, `install_date`, `install_source`, `install_location`
   - `_migrate_schema()` method for backward compatibility
@@ -167,6 +186,7 @@ Detection rules (in priority order):
   - Index on `install_source` for performance
 
 #### Data Model Extensions
+
 - **`core/models.py`** - Extended PackageManager enum
   - Added `SCOOP = "scoop"`
   - Added `MSSTORE = "msstore"`
@@ -174,6 +194,7 @@ Detection rules (in priority order):
   - Extended `UniversalPackageMetadata` with installed package fields
 
 #### Cache Service Methods
+
 - **`metadata/metadata_cache.py`** - New installed packages methods
   - `sync_installed_packages_from_registry()` - Sync from registry scan
   - `get_installed_packages()` - Query cached installed packages
@@ -181,12 +202,15 @@ Detection rules (in priority order):
   - Filtering by manager and install source
 
 #### UI Integration
+
 - **`ui/views/main_window.py`** - Replaced shell command approach
+  
   - Refresh now calls `metadata_cache.sync_installed_packages_from_registry()`
   - Displays results from cache query (instant)
   - Shows progress during registry scan
 
 - **`ui/components/package_table.py`** - Display formatting
+  
   - `_format_manager_name()` for proper capitalization
   - Manager column displays: "WinGet", "Chocolatey", "Scoop", "MS Store", "Unknown"
   - Color scheme for new managers (SCOOP, MSSTORE, UNKNOWN)
@@ -194,6 +218,7 @@ Detection rules (in priority order):
 ### Fixed
 
 #### Critical Database Enum Binding Bug
+
 - **Issue:** SQLite `ProgrammingError` when inserting packages
   - Error: "type 'PackageManager' is not supported"
   - PackageManager enum was passed directly to SQLite without conversion
@@ -205,6 +230,7 @@ Detection rules (in priority order):
 ### Changed
 
 #### Installed Package Refresh Strategy
+
 - **Before:** Shell commands invoked for each package manager (slow)
 - **After:** Single registry scan + Scoop directory scan (fast)
 - **UI Behavior:** "Installed" mode now uses registry-based sync
@@ -212,6 +238,7 @@ Detection rules (in priority order):
 ### Validated
 
 #### Registry Scan Test Results
+
 - ✅ **138 packages** discovered from Windows Registry
 - ✅ **5 packages** discovered from Scoop directory scan
 - ✅ **143 total packages** synced to database
@@ -222,10 +249,10 @@ Detection rules (in priority order):
 
 #### Performance Comparison
 
-| Method | Time | Packages | Status |
-|--------|------|----------|--------|
-| **Registry Scan (NEW)** | 1-2 seconds | 143 | ✅ 10-20x faster |
-| Shell Commands (OLD) | 11-20 seconds | varies | ❌ Deprecated |
+| Method                  | Time          | Packages | Status          |
+| ----------------------- | ------------- | -------- | --------------- |
+| **Registry Scan (NEW)** | 1-2 seconds   | 143      | ✅ 10-20x faster |
+| Shell Commands (OLD)    | 11-20 seconds | varies   | ❌ Deprecated    |
 
 ### Architecture Benefits
 
@@ -238,9 +265,11 @@ Detection rules (in priority order):
 ### Technical Details
 
 **Files Created:**
+
 - `metadata/providers/installed_registry_provider.py` (287 lines)
 
 **Files Modified:**
+
 - `core/models.py` - Extended PackageManager enum, added installed package fields
 - `metadata/metadata_cache.py` - Schema migration, sync methods, enum fix
 - `ui/views/main_window.py` - Registry-based refresh integration
@@ -248,6 +277,7 @@ Detection rules (in priority order):
 - `metadata/providers/__init__.py` - Export new providers
 
 **Registry Keys Scanned:**
+
 - `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`
 - `HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`
 - `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall`
@@ -272,17 +302,20 @@ Detection rules (in priority order):
 ### Added
 
 #### Source Toggle Control (`ui/views/main_window.py`)
+
 - **Radio button toggle** at top of window: "Installed" vs "Available"
   - Defaults to "Available" (remote repository search)
   - Tooltips explain each mode clearly
   - Disabled during operations to prevent mode switching mid-operation
 
 #### Clear Status Messages
+
 - **Status bar** now shows: "Viewing: Available packages - WinGet" or "Viewing: Installed packages - WinGet"
 - **Search placeholder** updates dynamically: "Search available packages..." or "Search installed packages..."
 - **Progress messages** clarify source: "Loading installed packages from WinGet..."
 
 #### Tab-Based Repository Selection
+
 - **Replaced dropdown + checkboxes** with clean tab interface
   - Tabs: "All Packages", "WinGet", "Chocolatey"
   - Shows package counts in tab labels (e.g., "WinGet (8,398)")
@@ -290,15 +323,19 @@ Detection rules (in priority order):
   - Clear visual hierarchy
 
 #### Smart Behavior Per Source
+
 - **Available Mode (default):**
+  
   - Search → Queries metadata cache (instant results)
   - Refresh → Shows info dialog (cache doesn't need manual refresh)
 
 - **Installed Mode:**
+  
   - Search → Filters already-loaded installed packages locally (instant)
   - Refresh → Calls package manager to list installed packages
 
 #### View Menu Reorganization
+
 - **Moved "Verbose Output"** from control panel checkbox to View menu
   - Checkable menu item with tooltip
   - Cleaner control panel layout
@@ -307,6 +344,7 @@ Detection rules (in priority order):
 ### Fixed
 
 #### Tab Selector Bug
+
 - **Issue:** Tab labels included package counts (e.g., "WinGet (8,398)"), breaking dictionary lookups
 - **Solution:** Changed to index-based lookup instead of text-based lookup
 - **Impact:** All tabs now correctly filter packages by selected repository
@@ -314,6 +352,7 @@ Detection rules (in priority order):
 ### Changed
 
 #### UI Architecture (`ui/views/main_window.py`)
+
 - Added `current_source` state variable ('installed' or 'available')
 - Created `create_source_toggle()` method for source radio buttons
 - Added `on_source_changed()` handler to update UI state
@@ -334,11 +373,13 @@ Detection rules (in priority order):
 #### Proposed Architecture
 
 **Current Issue:**
+
 - Available packages: Cached in SQLite, fast search, cross-manager aggregation ✅
 - Installed packages: Queried via shell commands, slow, single-manager only ❌
 - "All Packages" + "Installed" only shows WinGet (no unified aggregation) ❌
 
 **Proposed Solution:**
+
 - Add `is_installed` flag to existing `packages` table in metadata cache
 - Store installed state alongside available package metadata
 - Query SQLite instead of invoking package managers repeatedly
@@ -382,6 +423,7 @@ Detection rules (in priority order):
 ### Added
 
 #### UI Controls
+
 - **Repository filter checkboxes** in search toolbar
   - WinGet checkbox (default: checked)
   - Chocolatey checkbox (default: checked)
@@ -391,6 +433,7 @@ Detection rules (in priority order):
 ### Changed
 
 #### Search Functionality (`ui/views/main_window.py`)
+
 - **`search_packages()` method** - Now respects repository selection
   - Reads checkbox states to determine search scope
   - Validates at least one repository is selected
@@ -399,6 +442,7 @@ Detection rules (in priority order):
   - Status messages now show which repositories were searched
 
 #### User Experience
+
 - Search across both repositories by default (both checkboxes checked)
 - Easily filter to single repository by unchecking other
 - Status bar shows repository scope: "Found 10 results for 'python' in all repositories"
@@ -407,17 +451,20 @@ Detection rules (in priority order):
 ### Validated
 
 #### Cross-Repository Search Tests
+
 - ✅ **Cross-repo search working** - Returns results from both WinGet and Chocolatey
 - ✅ **Single-repo filtering** - WinGet-only and Chocolatey-only searches work correctly  
 - ✅ **FTS5 ranking** - Properly ranks results across repositories
 - ✅ **Source attribution** - Results correctly tagged with source manager
 
 **Test Results** (search for "python"):
+
 - Cross-repo: 10 results (4 WinGet + 6 Chocolatey)
 - WinGet only: 10 results (all WinGet)
 - Chocolatey only: 10 results (all Chocolatey)
 
 ### Test Suite
+
 - **`test_cross_repo_search.py`** - Comprehensive cross-repository validation
   - Tests cross-repo, WinGet-only, and Chocolatey-only searches
   - Validates result sources and counts
@@ -433,42 +480,48 @@ Detection rules (in priority order):
 
 #### Performance Results
 
-| Metric | Result | Status |
-|--------|--------|--------|
-| **Chocolatey Packages** | 10,000 | ✅ CCR API limit |
-| **Sync Time** | 4.49 minutes | ✅ Excellent |
-| **Sync Rate** | 37 pkg/sec | ✅ API limited |
-| **Search Speed** | 1.80ms avg | ✅ Sub-2ms |
-| **Total Packages** | 18,398 | ✅ WinGet + Choco |
-| **Total Cache Size** | 24.50 MB | ✅ 75% under target |
+| Metric                  | Result       | Status             |
+| ----------------------- | ------------ | ------------------ |
+| **Chocolatey Packages** | 10,000       | ✅ CCR API limit    |
+| **Sync Time**           | 4.49 minutes | ✅ Excellent        |
+| **Sync Rate**           | 37 pkg/sec   | ✅ API limited      |
+| **Search Speed**        | 1.80ms avg   | ✅ Sub-2ms          |
+| **Total Packages**      | 18,398       | ✅ WinGet + Choco   |
+| **Total Cache Size**    | 24.50 MB     | ✅ 75% under target |
 
 ### Added
 
 #### Chocolatey Integration
+
 - **`metadata/providers/chocolatey_provider.py`** - Chocolatey metadata provider
+  
   - Integrates with Chocolatey Community Repository OData API
   - Uses NuGet v2 protocol for package metadata
   - Fetches complete repository (10,000 package limit)
-  
+
 - **`metadata/sync/chocolatey_odata_fetcher.py`** - NuGet v2 OData API client
+  
   - Atom XML feed parser for Chocolatey packages
   - Automatic pagination handling (40 packages per page)
   - Rate limiting and error recovery
   - Full metadata extraction (name, version, description, tags, homepage, license)
 
 #### Test Suite
+
 - **`test_choco_sync.py`** - Chocolatey sync validation script
   - Tests full repository sync from Chocolatey API
   - Validates cross-repository search functionality
   - Performance benchmarks for single-repo and cross-repo queries
 
 ### Changed
+
 - **`metadata/sync/__init__.py`** - Exported `ChocolateyODataFetcher`
 - **`metadata/providers/__init__.py`** - Exported `ChocolateyProvider`
 
 ### Validated - Cross-Repository Architecture
 
 #### Single Database Performance
+
 - ✅ **18,398 packages** in unified SQLite cache (WinGet + Chocolatey)
 - ✅ **1.80ms average search** across both repositories
 - ✅ **24.50 MB cache size** (1.33 KB per package)
@@ -476,13 +529,16 @@ Detection rules (in priority order):
 - ✅ **Manager filtering** - Fast single-repo queries when needed
 
 #### Search Validation
+
 - ✅ **Single-repo search** - Chocolatey-only queries working
 - ✅ **Cross-repo search** - Unified results from both repositories
 - ✅ **Source attribution** - Results properly tagged with manager
 - ✅ **Relevance ranking** - FTS5 ranks across repositories seamlessly
 
 #### Architecture Decision Confirmed
+
 **Single database approach validated** over separate databases:
+
 - Unified FTS5 search ranks results across all package managers
 - Simple cross-repo search (just remove manager filter)
 - Efficient storage (excellent compression ratio)
@@ -491,6 +547,7 @@ Detection rules (in priority order):
 ### API Details
 
 **Chocolatey Community Repository:**
+
 - **Endpoint:** `https://community.chocolatey.org/api/v2/Packages`
 - **Protocol:** NuGet v2 OData (Atom XML)
 - **Pagination:** 40 packages per page (hardcoded by API)
@@ -498,6 +555,7 @@ Detection rules (in priority order):
 - **Rate Limiting:** 0.1s delay between requests
 
 ### Next Steps (Phase 3)
+
 - Implement UI sync progress dialog with provider selection
 - Add incremental delta sync for faster updates
 - Implement automatic background sync scheduling
@@ -515,23 +573,25 @@ Detection rules (in priority order):
 
 #### Performance Results
 
-| Metric | Target | Actual | Status |
-|--------|--------|--------|--------|
-| Search Speed | < 10ms | **1.52ms** | ✅ 85% faster |
-| Cache Size | < 100 MB | **6.21 MB** | ✅ 94% under |
-| Sync Time | < 5 min | **1.26 min** | ✅ 75% faster |
-| Sync Rate | > 100/sec | **111/sec** | ✅ 11% faster |
-| Scale Test (10K) | < 10ms | **3.59ms** | ✅ 64% faster |
+| Metric           | Target    | Actual       | Status       |
+| ---------------- | --------- | ------------ | ------------ |
+| Search Speed     | < 10ms    | **1.52ms**   | ✅ 85% faster |
+| Cache Size       | < 100 MB  | **6.21 MB**  | ✅ 94% under  |
+| Sync Time        | < 5 min   | **1.26 min** | ✅ 75% faster |
+| Sync Rate        | > 100/sec | **111/sec**  | ✅ 11% faster |
+| Scale Test (10K) | < 10ms    | **3.59ms**   | ✅ 64% faster |
 
 ### Added
 
 #### Core Infrastructure
+
 - **`metadata/` module** - Complete metadata caching system
   - `metadata_cache.py` - SQLite + FTS5 cache service with bulk update support
   - `providers/base.py` - Abstract MetadataProvider interface
   - `providers/winget_provider.py` - WinGet provider with full repository sync capability
 
 #### Sync Services
+
 - **`metadata/sync/` module** - Background synchronization services
   - `background_sync_service.py` - Orchestrates sync operations, tracks status per provider
   - `local_manifest_parser.py` - Parses local winget-pkgs repository clone ⭐ **Production method**
@@ -539,41 +599,48 @@ Detection rules (in priority order):
   - `wingetrun_fetcher.py` - winget.run REST API fetcher (alternative approach)
 
 #### Data Models
+
 - **`core/models.py`** - New `UniversalPackageMetadata` dataclass
   - Normalized structure for all package managers
   - FTS5-optimized search_tokens field
   - Bidirectional conversion with existing `Package` model
 
 #### UI Integration
+
 - **`ui/views/main_window.py`** - Search UI components
   - QLineEdit search bar with real-time search
   - Search button with enable/disable logic
   - Background cache initialization on first use
 
 #### Test Suite
+
 - `test_search.py` - Initial search validation
 - `test_10k_scale.py` - 10,000 synthetic package scale test ✅ ALL TARGETS EXCEEDED
 - `test_full_sync.py` - Full repository sync framework
 - `test_real_winget_sync.py` - **Production sync with 8,398 real packages** ⭐
 
 #### Documentation
+
 - `notes/sync_to_sql_architecture.md` - Complete architecture design
 - `notes/apt_data_structures.md` - APT architecture reference
 - `notes/WinGet_Rest_API_vs_SQLite_db-approach.md` - Approach comparison
 - `notes/Relative_size_of_apt_vs_winget_dbs.md` - Scale reference
 
 ### Changed
+
 - Enhanced `MetadataCacheService.refresh_cache()` to accept package iterators
 - Added `WinGetProvider.fetch_all_packages()` for full repository sync
 - Database schema: Added `sync_metadata` table for tracking sync status
 
 ### Fixed
+
 - WinGet database path: Corrected from `index.db` to `installed.db`
 - WinGet database schema: Updated queries for normalized tables
 - FTS5 query handling: Added sanitization for special characters (., -, etc.)
 - Tag parsing: Handle integer tags in YAML by converting to strings
 
 ### Validated
+
 - ✅ **8,398 real WinGet packages** synced from microsoft/winget-pkgs
 - ✅ **Zero parse errors** across all manifests
 - ✅ **Sub-2ms search** across 8,398 packages
@@ -581,6 +648,7 @@ Detection rules (in priority order):
 - ✅ **Architecture scales linearly** - Proven with 10K synthetic test
 
 ### Architecture Benefits
+
 - **Instant Search:** 1.52ms average across all query types
 - **Offline Capable:** All data cached locally in SQLite
 - **Cross-Repository Ready:** Pattern works for Chocolatey, Pip, NPM
@@ -588,11 +656,13 @@ Detection rules (in priority order):
 - **Efficient:** Only 740 bytes per package (SQLite + FTS5 compression)
 
 ### Dependencies Added
+
 - `PyYAML` - YAML manifest parsing
 - `requests` - HTTP requests for API fetchers (already installed)
 - `packaging` - Semantic version parsing (already installed)
 
 ### Next Steps (Phase 2)
+
 - Add Chocolatey provider (~9,500 packages)
 - Implement UI sync progress dialog
 - Add incremental delta sync
@@ -611,6 +681,7 @@ Detection rules (in priority order):
 **Solution:** Complete overhaul of registry-based path detection system.
 
 **Results:**
+
 - **Before:** 52/138 packages (38%) with valid installation paths
 - **After:** 84/138 packages (61%) with valid installation paths
 - **Improvement:** +32 packages detected (+62% increase!)
@@ -618,6 +689,7 @@ Detection rules (in priority order):
 ### Added
 
 - **UninstallString Path Extraction** (`ui/views/main_window.py`):
+  
   - New Method 3: Extract from `UninstallString` registry field
   - New Method 4: Extract from `InstallString` registry field
   - Regex pattern extracts directory from executable paths:
@@ -627,6 +699,7 @@ Detection rules (in priority order):
   - **Impact:** Fixed Vim, Notepad++, Armoury Crate Service, and many others
 
 - **Smart Parent/Path Selection** (`ui/views/main_window.py`):
+  
   - Intelligent decision logic: use extracted path vs. parent directory
   - Detects version subdirectories via pattern matching:
     - Version numbers: `vim91`, `v1.2.3`, `3.14`
@@ -638,12 +711,14 @@ Detection rules (in priority order):
   - **Impact:** Prevents showing `C:\Program Files` (too high) or versioned subdirs
 
 - **Multi-Hive Registry Search for ARP Packages** (`ui/views/main_window.py`):
+  
   - ARP packages now search ALL registry hives (HKLM + HKCU)
   - Prioritizes indicated hive but falls back to others
   - Handles cases where WinGet's ARP hive indication is inaccurate
   - **Impact:** Finds user-level installations missed by machine-only search
 
 - **Enhanced ARP Package Matching** (`ui/views/main_window.py`):
+  
   - ARP format detection: `ARP\Machine\X64\PackageName`
   - Extracts actual package ID from ARP path
   - Matches against both registry subkey name AND DisplayName
@@ -654,6 +729,7 @@ Detection rules (in priority order):
   - **Impact:** Fixed exact-match packages like "Vim 9.1" that weren't being found
 
 - **Debug Output Enhancements** (`ui/views/main_window.py`):
+  
   - Shows total registry entries scanned
   - Sample of entries with/without install paths (✓/✗ indicators)
   - Match reason tracking (e.g., "subkey_exact_arp_normalized")
@@ -663,6 +739,7 @@ Detection rules (in priority order):
 ### Fixed
 
 - **Installation Path Accuracy** (`ui/views/main_window.py`):
+  
   - Fixed: Vim 9.1 now shows `C:\Program Files\Vim` ✓
   - Fixed: Notepad++ now shows `C:\Program Files\Notepad++` ✓ (was showing `C:\Program Files`)
   - Fixed: Armoury Crate Service now shows path ✓ (was showing no path)
@@ -671,6 +748,7 @@ Detection rules (in priority order):
   - Fixed: Version-only package IDs (e.g., "4.7.1") now skipped entirely
 
 - **ARP Package Handling** (`ui/views/main_window.py`):
+  
   - Fixed: `winget show` no longer called for ARP packages (prevents error 2316632084)
   - Fixed: ARP packages search correct registry hives
   - Fixed: Case-sensitive vs case-insensitive matching for ARP subkeys
@@ -678,26 +756,32 @@ Detection rules (in priority order):
 ### Technical Details
 
 **Path Extraction Methods (in priority order):**
+
 1. `InstallLocation` field (direct registry value)
 2. `InstallPath` field (alternate registry field)
 3. `UninstallString` field (NEW - parse uninstaller path)
 4. `InstallString` field (NEW - parse installer path)
 
 **Regex Pattern for Path Extraction:**
+
 ```regex
 ^"?([A-Z]:[^"]+?)\\[^\\]+\.exe
 ```
+
 - Matches: `"C:\Program Files\App\uninstall.exe"` or `C:\path\to\file.exe`
 - Captures: Directory containing the executable
 
 **Version Subdirectory Detection:**
+
 ```regex
 (^|[^a-z])(v?\d+\.?\d*|bin|app|x64|x86|win\d+)$
 ```
+
 - Matches: `vim91`, `v1.2`, `bin`, `x64`, etc.
 - Action: Use parent directory instead of path itself
 
 **Confidence Scoring System:**
+
 - 150: Exact ARP subkey match (case-sensitive)
 - 145: Exact DisplayName match for ARP
 - 120-135: Normalized matches for ARP
@@ -707,9 +791,11 @@ Detection rules (in priority order):
 - +5-10: Boost if install path contains package name
 
 **Files Modified:**
+
 - `ui/views/main_window.py` - All path detection improvements (15 commits)
 
 **Commits in this release:**
+
 1. Improve install path matching with multi-term search and registry subkey checking
 2. Improve ARP package matching to check DisplayName field
 3. Fix winget show for ARP packages and broaden registry search
@@ -726,12 +812,14 @@ Detection rules (in priority order):
 ### Added - Professional UI and Menu System
 
 - **Menu Bar** (`ui/views/main_window.py`):
+  
   - Industry-standard menu structure: File, Edit, View, Config, Help
   - Keyboard shortcuts with Alt key navigation (underlined letters)
   - File menu with Exit action (Ctrl+Q shortcut)
   - Edit and View menus (placeholders for future features)
 
 - **Help Menu** (`ui/views/main_window.py`):
+  
   - **User Guide** - Placeholder dialog directing to README.md and CLAUDE.md
   - **Change Log** - Displays full CHANGELOG.md in scrollable dialog (800x600)
     - Monospace font for readability
@@ -744,12 +832,14 @@ Detection rules (in priority order):
     - Copyright notice
 
 - **Config Menu** (`ui/views/main_window.py`):
+  
   - **View Configuration** - Read-only display of config.json
     - Shows full file path at top (selectable for copying)
     - Pretty-printed JSON in monospace font
     - 700x500 dialog with scrolling
 
 - **Version Label** (`ui/views/main_window.py`):
+  
   - Subdued gray label in upper right corner of UI
   - Shows: `v0.3.0 (2025-12-26 21:20)`
   - Auto-extracts from CHANGELOG.md on startup
@@ -757,6 +847,7 @@ Detection rules (in priority order):
   - Unobtrusive but always visible
 
 - **Animated Spinner** (`ui/views/main_window.py`):
+  
   - Replaced static hourglass emoji with animated circling dots
   - 8 Braille pattern characters: ⣾ ⣽ ⣻ ⢿ ⡿ ⣟ ⣯ ⣷
   - Updates every 100ms (10 FPS) via QTimer
@@ -765,6 +856,7 @@ Detection rules (in priority order):
   - Shows next to status messages: `⣾ Getting package list...`
 
 - **Verbose Mode** (`ui/views/main_window.py`):
+  
   - Checkbox in control panel: "Verbose"
   - Tooltip: "Show detailed package manager output during operations"
   - When enabled, shows dialog after install/uninstall with:
@@ -775,6 +867,7 @@ Detection rules (in priority order):
   - Disabled by default for clean UX
 
 - **Persistent Status Bar** (`ui/views/main_window.py`):
+  
   - Package count stays visible after loading
   - Format: "132 packages loaded - Ready"
   - Proper grammar: "1 package" vs "132 packages"
@@ -795,24 +888,28 @@ Detection rules (in priority order):
 ### Technical Details
 
 **Menu System:**
+
 - `QMenuBar` with `QAction` items
 - Signal/slot connections to handler methods
 - File path resolution using `os.path.dirname(__file__)`
 - Regex version extraction: `r'##\s+\[([^\]]+)\]\s+-\s+(\d{4}-\d{2}-\d{2})'`
 
 **Animated Spinner:**
+
 - QTimer-based animation loop
 - Spinner state: `spinner_index`, `spinner_frames`, `spinner_timer`
 - `_update_spinner()` method called every 100ms
 - Lifecycle managed by operation signals
 
 **Verbose Dialog:**
+
 - Custom QDialog with QTextEdit widgets
 - Monospace font: 'Consolas', 'Courier New'
 - Stderr styled with red text (#d32f2f)
 - Displays `OperationResult.details` dict (stdout/stderr/exit_code)
 
 **NPM Fix:**
+
 - Conditional `shell=True` parameter: `use_shell = (manager == PackageManager.NPM)`
 - Only affects NPM commands, other managers unchanged
 - Windows-specific workaround for .cmd batch files
@@ -830,6 +927,7 @@ Detection rules (in priority order):
 ### Testing v0.3.0
 
 **Menu Bar:**
+
 1. Click each menu to verify structure
 2. Help → About - Check version shows v0.3.0 and date
 3. Help → Change Log - Scroll through full CHANGELOG.md
@@ -837,22 +935,26 @@ Detection rules (in priority order):
 5. File → Exit or Ctrl+Q to close
 
 **Spinner Animation:**
+
 1. Click Refresh with any package manager
 2. Watch progress label - should see rotating dots
 3. Verify smooth animation at 10 FPS
 
 **Verbose Mode:**
+
 1. Check "Verbose" checkbox
 2. Install or uninstall a package
 3. Verify detailed output dialog appears after operation
 4. Check stdout and stderr sections display correctly
 
 **NPM Support:**
+
 1. Select "NPM" from dropdown
 2. Click Refresh
 3. Verify global NPM packages load successfully
 
 **Persistent Status:**
+
 1. Load packages from any manager
 2. Verify status bar shows: "X packages loaded - Ready"
 3. Copy installation path
@@ -868,10 +970,12 @@ Detection rules (in priority order):
 - **Next Phase**: Phase 4 will implement full search functionality
 
 **Key Files Modified:**
+
 - `ui/views/main_window.py`: Menu bar, dialogs, spinner, verbose mode, version label, persistent status
 - `services/package_service.py`: NPM Windows fix with shell=True
 
 **Tag:**
+
 - `v0.3.0`: Major release with professional UI enhancements
 
 ---
@@ -881,6 +985,7 @@ Detection rules (in priority order):
 ### Added - Installation Path Discovery and UX Enhancements
 
 - **Installation Path Display** (`ui/views/main_window.py`):
+  
   - `_get_winget_install_location()` method queries Windows Registry for actual installation directories
   - Searches three registry hives: HKLM, HKLM WOW6432Node, HKCU
   - Looks up `InstallLocation` and `InstallPath` registry values
@@ -889,6 +994,7 @@ Detection rules (in priority order):
   - Displays in package details dialog for WinGet packages only
 
 - **Enhanced Package Details Dialog** (`ui/views/main_window.py`):
+  
   - Custom `QDialog` replaces simple `QMessageBox` for richer UI
   - Shows package information: Name, Version, Manager, Description
   - Installation Location section (when available):
@@ -899,6 +1005,7 @@ Detection rules (in priority order):
   - Useful for adding installation directories to PATH environment variable
 
 - **Manual Package Installation** (`ui/views/main_window.py`):
+  
   - `QInputDialog` for entering WinGet package IDs directly
   - Install button always enabled when WinGet selected (no selection required)
   - Supports installing packages not yet visible in the list
@@ -919,6 +1026,7 @@ Detection rules (in priority order):
 ### Changed
 
 - **UI Theme Integration** (`ui/components/package_table.py`):
+  
   - Removed color-coded table backgrounds (light green/orange/blue/pink)
   - Now uses system theme colors for table display
   - Much easier on eyes for extended viewing sessions
@@ -926,6 +1034,7 @@ Detection rules (in priority order):
   - Commented out `_apply_row_color()` calls in `set_packages()`
 
 - **Button State Logic** (`ui/views/main_window.py`):
+  
   - Install button always enabled (supports manual WinGet ID entry)
   - Uninstall button only enabled when package selected
   - Previously both buttons required package selection
@@ -940,6 +1049,7 @@ Detection rules (in priority order):
 ### Technical Details
 
 **Windows Registry Lookup:**
+
 - `winreg.OpenKey()` accesses uninstall registry keys
 - Enumerates all subkeys (installed applications)
 - Matches package name (e.g., "Firefox" from "Mozilla.Firefox")
@@ -947,6 +1057,7 @@ Detection rules (in priority order):
 - Only returns paths that actually exist on filesystem
 
 **Qt Data Storage:**
+
 - `Qt.ItemDataRole.UserRole` stores Python objects in table cells
 - Survives table sorting operations intact
 - Retrieved via `item.data(Qt.ItemDataRole.UserRole)`
@@ -954,6 +1065,7 @@ Detection rules (in priority order):
 ### Testing v0.0.2
 
 **Installation Path Feature:**
+
 1. Select "WinGet" → Click Refresh
 2. Double-click on Mozilla Firefox, Notepad++, or VLC
 3. Verify "Installation Location" section appears with correct path
@@ -962,6 +1074,7 @@ Detection rules (in priority order):
 6. Paste in Notepad to verify clipboard contents
 
 **Manual Installation:**
+
 1. Select "WinGet" (ensure no package selected)
 2. Click Install button
 3. Enter package ID: `Microsoft.PowerToys`
@@ -969,6 +1082,7 @@ Detection rules (in priority order):
 5. Verify package installs successfully
 
 **Sorting Safety:**
+
 1. Load WinGet packages
 2. Click "Version" column header to sort
 3. Select any package
@@ -986,10 +1100,12 @@ Detection rules (in priority order):
 - **Next Phase**: Phase 4 will implement full search functionality
 
 **Key Files Modified:**
+
 - `ui/views/main_window.py`: Registry lookup, enhanced dialog, manual entry, clipboard copy
 - `ui/components/package_table.py`: UserRole data storage, theme integration
 
 **Tag:**
+
 - `v0.0.2`: Minor release with installation path discovery and UX enhancements
 
 ---
@@ -999,6 +1115,7 @@ Detection rules (in priority order):
 ### Added - Phase 3: Install/Uninstall Functionality
 
 - **Install/Uninstall Implementation** (`ui/views/main_window.py`):
+  
   - `install_package()` method: Full worker-based implementation with confirmation dialog
   - `uninstall_package()` method: Full worker-based implementation with warning dialog
   - Package selection enables/disables Install/Uninstall buttons
@@ -1009,18 +1126,21 @@ Detection rules (in priority order):
   - Success/failure dialogs with detailed messages
 
 - **Worker State Management**:
+  
   - `current_install_worker` and `current_uninstall_worker` tracking
   - `selected_package` state variable for button enable/disable logic
   - Proper worker cleanup with `.wait()` and `.deleteLater()`
   - Multiple worker types cleaned up in `on_operation_finished()`
 
 - **Signal Handlers** (`ui/views/main_window.py`):
+  
   - `on_package_selected()`: Enables Install/Uninstall buttons when package selected
   - `on_install_complete()`: Handles installation completion, shows dialog, auto-refreshes
   - `on_uninstall_complete()`: Handles uninstallation completion, shows dialog, auto-refreshes
   - Both handlers log operations to history file
 
 - **Operation History Logging**:
+  
   - `_log_operation()` helper method writes to `operation_history.json`
   - Logs stored in XDG data directory: `%APPDATA%\Local\winpacman\operation_history.json`
   - JSON format with operation type, package, success status, message, timestamp
@@ -1028,6 +1148,7 @@ Detection rules (in priority order):
   - Handles I/O errors gracefully (prints to console, doesn't crash)
 
 - **Button State Logic**:
+  
   - Install/Uninstall buttons disabled by default
   - Enabled when package selected (via `package_selected` signal)
   - Disabled when package manager dropdown changes
@@ -1046,10 +1167,12 @@ Detection rules (in priority order):
 ### Changed
 
 - **enable_controls() Method**: Conditionally enables Install/Uninstall buttons
+  
   - Only enables if package is selected
   - Previously didn't manage Install/Uninstall button states
 
 - **on_manager_changed() Method**: Clears selection and disables buttons
+  
   - Resets `selected_package` to None
   - Disables Install/Uninstall buttons when switching managers
   - Previously only cleared table and status label
@@ -1057,6 +1180,7 @@ Detection rules (in priority order):
 ### Testing Phase 3
 
 **Test Cases Verified:**
+
 1. ✅ **Pip Install/Uninstall**: Cowsay installed and uninstalled successfully (no admin required)
 2. ✅ **Chocolatey Install**: fzf installed successfully with auto-refresh
 3. ✅ **Chocolatey Uninstall (no admin)**: Permission error displayed correctly, package not removed
@@ -1103,10 +1227,12 @@ python gui_pyqt6.py
 - **Next Phase**: Phase 4 will implement search functionality
 
 **Key Files Modified:**
+
 - `ui/views/main_window.py`: Install/uninstall implementation, signal handlers, state management
 - `services/package_service.py`: Improved error message handling
 
 **Tag:**
+
 - `v0.0.1d`: Beta release with Phase 3 complete
 
 ---
@@ -1116,6 +1242,7 @@ python gui_pyqt6.py
 ### Added - Phase 2: PyQt6 UI with Package Listing
 
 - **Main Application Window** (`ui/views/main_window.py`):
+  
   - `WinPacManMainWindow` class extending QMainWindow
   - Modern control panel with package manager dropdown selector
   - Action buttons: Refresh, Search, Install, Uninstall
@@ -1125,6 +1252,7 @@ python gui_pyqt6.py
   - Theme support (light/dark) with stylesheet application
 
 - **Package Table Widget** (`ui/components/package_table.py`):
+  
   - `PackageTableWidget` custom QTableWidget for package display
   - Color-coded rows by package manager:
     - WinGet: Light green (#E8F5E8)
@@ -1138,12 +1266,14 @@ python gui_pyqt6.py
   - Automatic column sizing with interactive resize support
 
 - **Enhanced Package Workers** (`ui/workers/package_worker.py`):
+  
   - Progress tracking with current/total counts and status messages
   - Detailed debug logging for troubleshooting
   - Signal emissions: `started`, `progress`, `packages_loaded`, `error_occurred`, `finished`
   - Thread-safe communication via pyqtSignal/pyqtSlot decorators
 
 - **Improved Error Handling** (`services/package_service.py`):
+  
   - JSON module properly imported at file level
   - Separate exception handling for `FileNotFoundError` vs other errors
   - User-friendly error messages with installation suggestions:
@@ -1156,14 +1286,17 @@ python gui_pyqt6.py
 ### Fixed
 
 - **Table Display Issue**: Added explicit `setForeground(QColor("#000000"))` to table cells
+  
   - Previously, text was invisible due to white/light text on light backgrounds
   - Now displays black text on color-coded backgrounds for all package managers
 
 - **NPM JSON Import Error**: Moved `import json` from function body to module imports
+  
   - Fixed "cannot access local variable 'json' where it is not associated with a value" error
   - Exception handler can now properly reference `json.JSONDecodeError`
 
 - **Package Manager Not Available**: Separated `FileNotFoundError` handling from general errors
+  
   - Now shows `PackageManagerNotAvailableError` with helpful installation instructions
   - Previously showed generic "operation failed" messages
 
@@ -1199,10 +1332,12 @@ python gui_pyqt6.py
 - **Next Phase**: Phase 3 will implement Install/Uninstall functionality
 
 **Key Commits:**
+
 - `f1d784e`: Fix PyQt6 segmentation fault - migrate from FluentWindow to QMainWindow
 - `5aa783f`: Phase 2 Complete - FluentWindow UI with Package Listing
 
 **Tag:**
+
 - `v0.0.1c`: Beta release with Phase 2 complete
 
 ---
@@ -1212,6 +1347,7 @@ python gui_pyqt6.py
 ### Added - Phase 1: PyQt6 Foundation
 
 - **PyQt6 Worker Framework** (`ui/workers/`):
+  
   - `PackageSignals` class with pyqtSignal definitions for thread-safe communication
   - `PackageListWorker` (QThread): Non-blocking package listing with progress signals
   - `PackageInstallWorker` (QThread): Non-blocking package installation
@@ -1220,6 +1356,7 @@ python gui_pyqt6.py
   - Signals: `progress`, `packages_loaded`, `operation_complete`, `error_occurred`, `started`, `finished`
 
 - **PyQt6 Test GUI** (`gui_pyqt6.py`):
+  
   - Minimal test window demonstrating QThread worker functionality
   - Signal/slot communication pattern with no UI freezing
   - Progress bar and status updates via pyqtSignal
@@ -1227,6 +1364,7 @@ python gui_pyqt6.py
   - Proper worker lifecycle management with cleanup
 
 - **Dependencies Added** (`requirements.txt`):
+  
   - **PyQt-Fluent-Widgets 1.10.5**: Windows 11 Fluent Design components
   - **PyQt6-Frameless-Window 0.7.4**: Modern frameless window styling
   - **pywin32 311**: Windows integration (Mica effects, notifications)
@@ -1268,9 +1406,11 @@ python gui_pyqt6.py
    - No UI freezing or "white out"
 
 **Key Commits:**
+
 - `3457e97`: Phase 1 Complete - PyQt6 Foundation with QThread Workers
 
 **Tag:**
+
 - `v0.0.1b`: Beta release with Phase 1 complete
 
 ---
@@ -1278,7 +1418,9 @@ python gui_pyqt6.py
 ## [0.0.1] - 2025-12-26
 
 ### Added
+
 - **Core Architecture**:
+  
   - Layered architecture with clean separation of concerns (Presentation, Service, Core, Infrastructure layers)
   - Comprehensive data models in `core/models.py`:
     - `PackageManager` enum: WINGET, CHOCOLATEY, PIP, NPM
@@ -1288,6 +1430,7 @@ python gui_pyqt6.py
   - Custom exception hierarchy in `core/exceptions.py` with 11 specific exception types
 
 - **Configuration Management**:
+  
   - XDG Base Directory specification compliance via `ConfigManager` class
   - Configuration stored in `~/.config/winpacman/` (Windows: `%APPDATA%/Local/winpacman/`)
   - Dot-notation access for nested configuration values
@@ -1295,6 +1438,7 @@ python gui_pyqt6.py
   - Persistent JSON storage with automatic directory creation
 
 - **Package Manager Integration**:
+  
   - WinGet support with regex-based output parsing (`re.split(r'\s{2,}', line)`)
   - Chocolatey support with simple space-split parsing
   - Pip support with JSON output format (`--format=json`)
@@ -1303,12 +1447,14 @@ python gui_pyqt6.py
   - Version extraction for all supported package managers
 
 - **Threading Support**:
+  
   - `PackageOperationWorker` class for non-blocking operations
   - Background thread execution with result/error capture
   - Progress callback system for real-time status updates
   - Configurable timeouts (list: 60s, install: 300s, uninstall: 180s)
 
 - **Console Application** (`main.py`):
+  
   - Interactive mode with welcome screen and system info
   - Command-line modes: `list`, `search`, `info`, `config`, `test-threading`
   - Package manager status display with version information
@@ -1316,6 +1462,7 @@ python gui_pyqt6.py
   - Threading demonstration functionality
 
 - **Tkinter GUI** (`gui_tkinter.py`):
+  
   - Modern tabbed interface (Discover, Installed, Updates, Settings)
   - Package manager selector dropdown
   - Package listing with color-coding by manager
@@ -1324,6 +1471,7 @@ python gui_pyqt6.py
   - Status bar with real-time updates
 
 - **System Utilities** (`utils/system_utils.py`):
+  
   - `SystemUtils` class with static methods:
     - `is_command_available()`: Check if command exists in PATH
     - `get_command_version()`: Extract version information
@@ -1335,6 +1483,7 @@ python gui_pyqt6.py
   - `PathManager` class for temporary file and log management
 
 - **Documentation**:
+  
   - `README.md`: Project overview and installation instructions
   - `WARP.md`: Comprehensive development guidance for AI agents
   - `CLAUDE.md`: Claude Code instance guidance with architecture overview
@@ -1342,18 +1491,22 @@ python gui_pyqt6.py
   - Type hints throughout entire codebase
 
 - **PyQt6 Environment**:
+  
   - PyQt6 6.10.1 with Qt 6.10.0 successfully installed
   - Windows Python virtual environment at `winpacman_env_windows/`
   - All dependencies installed: xdg-base-dirs, requests, packaging, psutil
   - Verified and tested installation ready for GUI development
 
 ### Changed
+
 - N/A (Initial release)
 
 ### Fixed
+
 - N/A (Initial release)
 
 ### Notes
+
 - **Phase 1 Complete**: Core architecture and foundation established with 2000+ lines of well-organized Python code
 - **Python Version**: Requires Python 3.11+
 - **Platform**: Primary target is Windows 10/11, but designed with cross-platform compatibility in mind
@@ -1365,6 +1518,7 @@ python gui_pyqt6.py
   - NPM (optional, requires Node.js)
 
 ### Development History
+
 Development commands used during Phase 1 implementation:
 
 ```powershell
@@ -1395,12 +1549,14 @@ npm list -g --json --depth=0            # Test NPM
 ```
 
 **Key Commits:**
+
 - `4af5e51`: Phase 1 Foundation Complete - WinPacMan architecture established
 - `e711588`: Phase 1 completed - Phase 1 Report
 - `bb9886d`: Add WARP.md for AI agent development guidance
 - `7ce2c7f`: Add CLAUDE.md and document successful PyQt6 6.10.1 installation
 
 **Tag:**
+
 - `v0.0.1`: Initial release with Phase 1 complete
 
 ---
@@ -1408,6 +1564,7 @@ npm list -g --json --depth=0            # Test NPM
 ## Development Phases
 
 ### Phase 1: Foundation (Complete)
+
 - Core architecture and data models
 - Package manager integration (4 managers)
 - Configuration system
@@ -1417,6 +1574,7 @@ npm list -g --json --depth=0            # Test NPM
 - PyQt6 environment setup
 
 ### Phase 2: GUI Development (Planned)
+
 - PyQt6 UI components
 - Modern Windows 11-style interface
 - QThread implementation for background operations
@@ -1425,6 +1583,7 @@ npm list -g --json --depth=0            # Test NPM
 - Advanced package management features
 
 ### Phase 3: Enhanced Features (Planned)
+
 - Package installation/uninstallation
 - Package updates and upgrades
 - Advanced search with filters
@@ -1438,6 +1597,7 @@ npm list -g --json --depth=0            # Test NPM
 ## Version Format
 
 WinPacMan follows Semantic Versioning (MAJOR.MINOR.PATCH):
+
 - **MAJOR**: Incompatible API changes
 - **MINOR**: New functionality in a backward-compatible manner
 - **PATCH**: Backward-compatible bug fixes

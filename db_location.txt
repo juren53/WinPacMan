@@ -1,0 +1,9 @@
+The SQLite database is located at:
+
+`Path(xdg_data_home()) / "winpacman" / "metadata_cache.db"`
+
+On Windows, a common default path (if XDG environment variables are not set) would be:
+
+`C:\Users\<YourUsername>\.local\share\winpacman\metadata_cache.db`
+
+The `<YourUsername>` part will be replaced by your actual Windows username.

@@ -10,6 +10,10 @@ psutil>=7.0.0
 # PyQt6 UI (using standard widgets with custom styling)
 pywin32>=306
 
+# Markdown rendering for help system
+markdown>=3.4.0
+pygments>=2.15.0
+
 # Development tools (install separately)
 # black>=25.0.0
 # mypy>=1.19.0

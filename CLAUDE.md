@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WinPacMan is a Python-based unified package manager for Windows that provides a single interface for managing packages across WinGet, Chocolatey, Pip, and NPM. Built with PyQt6 (in development), it uses a modular, layered architecture with threading for non-blocking operations.
 
+The project uses a stanard Python venv virtual environment that must be set for Python to run properly 
+
 **Current Status:** Phase 1 complete. Core logic and CLI interface functional. PyQt6 6.10.1 successfully installed and ready for GUI development. Basic Tkinter GUI available as fallback.
 
 ## Development Commands
