@@ -1,0 +1,22 @@
+Discrepancy in WinGet package counts.txt
+
+The discrepancy in the WinGet package count (4315 packages in WPM vs. ~9000 reported by WinGet) can be attributed
+  to the following:
+
+   1. WinGet.run API Limitation: WPM currently uses the winget.run third-party API (via WinGetRunFetcher) to fetch available WinGet
+      packages. It appears this API, despite its pagination attempts, is only returning a subset of the total WinGet package
+      inventory. The 4315 packages likely represent the full extent of what this specific API is providing at the moment.
+   2. `winget.exe` Version: Your current winget.exe version (v1.12.350) does not support structured output formats like JSON for its
+      search command. This prevents us from reliably running winget search directly and parsing its output to get the full ~9000
+      packages. The direct CLI output can be inconsistent or interactive, making programmatic parsing difficult.
+
+  In summary: The winget.run API is currently the bottleneck for getting the complete WinGet package list into WPM's cache. While
+  we've enabled a full refresh using this API, its current output limits the total number of packages fetched.
+
+  Potential Future Solutions:
+   * Upgrade `winget.exe`: If a newer version of winget.exe supporting JSON output for search becomes available, we could switch to
+     using that for a more comprehensive and direct package list.
+   * Alternative API/Source: Investigate if other WinGet APIs or methods (e.g., winget source export) provide more complete and
+     parseable data.
+
+  For now, the 4315 packages represent the maximum that can be reliably fetched via the current winget.run API integration.

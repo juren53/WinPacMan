@@ -2,6 +2,15 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.1e] - 2025-12-27
+
+### Fixed
+- **WinGet Manifest Parsing Performance**: Optimized `WinGetLocalManifestFetcher` to prevent freezes and memory issues during WinGet cache refresh.
+  - Refactored manifest scanning to use a two-pass approach, directly iterating `rglob` in both passes to avoid creating massive in-memory lists of file paths.
+  - Added granular console logging for each processed manifest file to provide better feedback during the parsing process.
+
+---
+
 ## [0.5.1d] - 2025-12-27
 
 ### Added
