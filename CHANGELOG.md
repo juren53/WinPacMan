@@ -34,6 +34,31 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
 
 ---
 
+## [0.5.3b] - 2025-12-30
+
+### Added
+- **Single-Instance Application Enforcement**:
+  - Added `SingleInstanceChecker` class using Windows named mutex (`Global\WinPacMan_SingleInstance_Mutex`) to prevent multiple instances.
+  - Detects if another instance is already running on startup.
+  - Shows warning dialog if duplicate instance detected: "Another instance of WinPacMan is already running."
+  - Automatically prevents conflicts from concurrent package operations and database locking issues.
+  - Proper mutex cleanup with try/finally pattern on application exit.
+  - Cross-platform safe: Always allows multiple instances on non-Windows systems.
+
+- **Window Geometry Persistence**:
+  - WinPacMan now remembers window size, position, and maximized state between sessions.
+  - Automatically saves window geometry on close via `closeEvent()` handler.
+  - Automatically restores saved geometry on startup via `restore_window_geometry()`.
+  - Persisted properties: width, height, x position, y position, maximized state.
+  - Settings stored in `~/.config/winpacman/config.json` under `ui.window_state`.
+  - Falls back to default 1000x700 size if no saved state or error occurs.
+  - Seamless user experience: resize/move window, close app, reopens in same position.
+
+### Fixed
+- **Version Label Display**: Restored version and date stamp label in upper right corner of main window that was removed during UI redesign (v0.5.2). Label now displays version from CHANGELOG.md (e.g., "v0.5.3b (2025-12-30)") with subtle gray styling positioned below menu bar and above repository tabs.
+
+---
+
 ## [0.5.2a] - 2025-12-30
 
 ### Fixed
