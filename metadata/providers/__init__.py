@@ -4,6 +4,7 @@ from .base import MetadataProvider
 from .winget_provider import WinGetProvider
 from .chocolatey_provider import ChocolateyProvider
 from .scoop_provider import ScoopProvider
+from .npm_provider import NpmProvider
 from .installed_registry_provider import InstalledRegistryProvider, ScoopInstalledProvider
 
 __all__ = [
@@ -11,6 +12,7 @@ __all__ = [
     'WinGetProvider',
     'ChocolateyProvider',
     'ScoopProvider',
+    'NpmProvider',
     'InstalledRegistryProvider',
     'ScoopInstalledProvider'
 ]

@@ -24,7 +24,7 @@ from ui.workers.package_worker import (
     PackageInstallWorker,
     PackageUninstallWorker
 )
-from metadata import MetadataCacheService, WinGetProvider, ScoopProvider, ChocolateyProvider
+from metadata import MetadataCacheService, WinGetProvider, ScoopProvider, ChocolateyProvider, NpmProvider
 from core.config import config_manager
 from ui.components.package_table import PackageTableWidget
 from utils.system_utils import WindowsPowerManager
@@ -70,6 +70,10 @@ class WinPacManMainWindow(QMainWindow):
         # Register Scoop provider
         scoop_provider = ScoopProvider()
         self.metadata_cache.register_provider(scoop_provider)
+
+        # Register NPM provider
+        npm_provider = NpmProvider()
+        self.metadata_cache.register_provider(npm_provider)
 
         # State
         self.current_packages: List[Package] = []
@@ -592,7 +596,8 @@ class WinPacManMainWindow(QMainWindow):
         providers = [
             ('WinGet', 'winget'),
             ('Chocolatey', 'chocolatey'),
-            ('Scoop', 'scoop')
+            ('Scoop', 'scoop'),
+            ('NPM', 'npm')
         ]
 
         # Initial table population
