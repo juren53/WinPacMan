@@ -27,6 +27,7 @@ from ui.workers.package_worker import (
 from metadata import MetadataCacheService, WinGetProvider, ScoopProvider, ChocolateyProvider
 from core.config import config_manager
 from ui.components.package_table import PackageTableWidget
+from utils.system_utils import WindowsPowerManager
 
 # Markdown rendering imports
 import markdown
@@ -494,8 +495,10 @@ class WinPacManMainWindow(QMainWindow):
             QApplication.processEvents()
 
             try:
-                # Refresh the cache
-                self.metadata_cache.refresh_cache(manager=manager_name, force=True)
+                # Prevent system sleep during cache refresh
+                with WindowsPowerManager.prevent_sleep():
+                    # Refresh the cache
+                    self.metadata_cache.refresh_cache(manager=manager_name, force=True)
 
                 # Update table data
                 refresh_table_data()
@@ -538,11 +541,13 @@ class WinPacManMainWindow(QMainWindow):
             QApplication.processEvents()
 
             try:
-                # Refresh all providers
-                for display_name, manager_name in providers:
-                    title_label.setText(f"<h2>Package Cache Summary - Refreshing {display_name}...</h2>")
-                    QApplication.processEvents()
-                    self.metadata_cache.refresh_cache(manager=manager_name, force=True)
+                # Prevent system sleep during all cache refreshes
+                with WindowsPowerManager.prevent_sleep():
+                    # Refresh all providers
+                    for display_name, manager_name in providers:
+                        title_label.setText(f"<h2>Package Cache Summary - Refreshing {display_name}...</h2>")
+                        QApplication.processEvents()
+                        self.metadata_cache.refresh_cache(manager=manager_name, force=True)
 
                 # Update table data
                 refresh_table_data()
@@ -822,8 +827,10 @@ class WinPacManMainWindow(QMainWindow):
         QApplication.processEvents()  # Update UI
 
         try:
-            for provider in self.metadata_cache.providers:
-                self.metadata_cache.refresh_cache(manager=provider.get_manager_name(), force=True)
+            # Prevent system sleep during cache refresh
+            with WindowsPowerManager.prevent_sleep():
+                for provider in self.metadata_cache.providers:
+                    self.metadata_cache.refresh_cache(manager=provider.get_manager_name(), force=True)
 
             total_count = self.metadata_cache.get_package_count()
             self.status_label.setText(f"Cache refreshed: {total_count} packages indexed")

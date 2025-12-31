@@ -4,6 +4,7 @@ import os
 import platform
 from typing import Optional, List, Tuple
 from core.exceptions import PackageManagerNotAvailableError
+from contextlib import contextmanager
 
 
 class SystemUtils:
@@ -134,3 +135,67 @@ class PathManager:
         except Exception:
             pass
         return removed
+
+
+class WindowsPowerManager:
+    """
+    Manage Windows power settings to prevent sleep during long operations.
+
+    Uses SetThreadExecutionState Windows API to temporarily prevent the system
+    from going to sleep or turning off the display during cache refreshes and
+    package installations.
+    """
+
+    # Windows API constants for SetThreadExecutionState
+    ES_CONTINUOUS = 0x80000000
+    ES_SYSTEM_REQUIRED = 0x00000001
+    ES_DISPLAY_REQUIRED = 0x00000002
+    ES_AWAYMODE_REQUIRED = 0x00000040
+
+    @staticmethod
+    @contextmanager
+    def prevent_sleep(prevent_display_sleep: bool = False):
+        """
+        Context manager to prevent Windows from sleeping during an operation.
+
+        Usage:
+            with WindowsPowerManager.prevent_sleep():
+                # Long-running operation here
+                download_packages()
+
+        Args:
+            prevent_display_sleep: If True, also prevents display from turning off
+
+        Yields:
+            None
+        """
+        if platform.system() != "Windows":
+            # Non-Windows systems - just yield without doing anything
+            yield
+            return
+
+        try:
+            import ctypes
+
+            # Set flags to prevent sleep
+            flags = WindowsPowerManager.ES_CONTINUOUS | WindowsPowerManager.ES_SYSTEM_REQUIRED
+
+            if prevent_display_sleep:
+                flags |= WindowsPowerManager.ES_DISPLAY_REQUIRED
+
+            # Prevent system sleep
+            previous_state = ctypes.windll.kernel32.SetThreadExecutionState(flags)
+
+            print(f"[PowerManager] System sleep prevention enabled (flags: 0x{flags:X})")
+
+            try:
+                yield
+            finally:
+                # Restore previous power state
+                ctypes.windll.kernel32.SetThreadExecutionState(WindowsPowerManager.ES_CONTINUOUS)
+                print("[PowerManager] System sleep prevention disabled")
+
+        except Exception as e:
+            # If power management fails, just log and continue
+            print(f"[PowerManager] Failed to set power state: {e}")
+            yield
