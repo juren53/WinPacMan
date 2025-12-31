@@ -50,7 +50,7 @@ class NpmProvider(MetadataProvider):
         """
         print("[NpmProvider] NPM has millions of packages.")
         print("[NpmProvider] Use search_packages() to find specific packages.")
-        print("[NpmProvider] Use fetch_popular_packages() to cache top packages.")
+        print("[NpmProvider] Use fetch_all_packages() to cache popular packages.")
         return iter([])
 
     def search_packages(self, query: str, max_results: int = 20) -> Iterator[UniversalPackageMetadata]:
@@ -102,12 +102,14 @@ class NpmProvider(MetadataProvider):
 
         return None
 
-    def fetch_popular_packages(self, progress_callback=None, limit: int = 1000) -> Iterator[UniversalPackageMetadata]:
+    def fetch_all_packages(self, progress_callback=None, limit: int = 1000) -> Iterator[UniversalPackageMetadata]:
         """
         Fetch popular/trending packages from NPM for cache.
 
-        This is an alternative to fetching ALL packages (which would be millions).
-        We can search for popular packages or use NPM's trending/popular endpoints.
+        Note: NPM has ~2-3 million packages, so we don't fetch ALL packages.
+        Instead, we fetch popular packages by searching for common keywords.
+        This is called 'fetch_all_packages' to match the interface expected by
+        the metadata cache refresh logic.
 
         Args:
             progress_callback: Optional callback(current, total, message)
