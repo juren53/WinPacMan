@@ -2,6 +2,22 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.4a] - 2025-12-31
+
+### Changed
+- **Compact Horizontal Button Layout**:
+  - Redesigned Installed Packages buttons from large vertical stack to compact horizontal layout.
+  - Changed layout: Three buttons now arranged horizontally side-by-side.
+  - Shortened button labels for compact display:
+    - "List Installed Packages" → "List Installed"
+    - "Refresh Installed" → "Refresh"
+    - "Uninstall" (unchanged)
+  - Significantly reduced vertical space usage in control panel.
+  - More modern, efficient appearance.
+  - Better screen space utilization.
+
+---
+
 ## [0.5.4] - 2025-12-31
 
 ### Added
