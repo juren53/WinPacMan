@@ -137,6 +137,79 @@ class PathManager:
         return removed
 
 
+class SingleInstanceChecker:
+    """
+    Ensure only one instance of the application runs at a time.
+
+    Uses a named mutex on Windows to prevent multiple instances.
+    """
+
+    def __init__(self, app_name: str = "WinPacMan"):
+        """
+        Initialize single instance checker.
+
+        Args:
+            app_name: Unique application name for the mutex
+        """
+        self.app_name = app_name
+        self.mutex_name = f"Global\\{app_name}_SingleInstance_Mutex"
+        self.mutex_handle = None
+
+    def is_already_running(self) -> bool:
+        """
+        Check if another instance of the application is already running.
+
+        Returns:
+            True if another instance is running, False otherwise
+        """
+        if platform.system() != "Windows":
+            # For non-Windows systems, always allow (could implement using lock files)
+            return False
+
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            # Windows API constants
+            ERROR_ALREADY_EXISTS = 183
+
+            # Create or open named mutex
+            kernel32 = ctypes.windll.kernel32
+            self.mutex_handle = kernel32.CreateMutexW(
+                None,  # Default security attributes
+                False,  # Don't initially own the mutex
+                self.mutex_name  # Mutex name
+            )
+
+            # Check if mutex already existed
+            last_error = kernel32.GetLastError()
+
+            if last_error == ERROR_ALREADY_EXISTS:
+                # Another instance is already running
+                print(f"[SingleInstance] Another instance of {self.app_name} is already running")
+                return True
+            else:
+                # This is the first instance
+                print(f"[SingleInstance] First instance of {self.app_name} started")
+                return False
+
+        except Exception as e:
+            print(f"[SingleInstance] Error checking for existing instance: {e}")
+            # If check fails, allow the application to run
+            return False
+
+    def release(self):
+        """Release the mutex when application exits."""
+        if self.mutex_handle and platform.system() == "Windows":
+            try:
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                kernel32.CloseHandle(self.mutex_handle)
+                print(f"[SingleInstance] Mutex released")
+            except Exception as e:
+                print(f"[SingleInstance] Error releasing mutex: {e}")
+
+
 class WindowsPowerManager:
     """
     Manage Windows power settings to prevent sleep during long operations.
