@@ -24,7 +24,7 @@ from ui.workers.package_worker import (
     PackageInstallWorker,
     PackageUninstallWorker
 )
-from metadata import MetadataCacheService, WinGetProvider, ScoopProvider
+from metadata import MetadataCacheService, WinGetProvider, ScoopProvider, ChocolateyProvider
 from core.config import config_manager
 from ui.components.package_table import PackageTableWidget
 
@@ -61,6 +61,10 @@ class WinPacManMainWindow(QMainWindow):
         # Register WinGet provider
         winget_provider = WinGetProvider()
         self.metadata_cache.register_provider(winget_provider)
+
+        # Register Chocolatey provider
+        chocolatey_provider = ChocolateyProvider()
+        self.metadata_cache.register_provider(chocolatey_provider)
 
         # Register Scoop provider
         scoop_provider = ScoopProvider()
