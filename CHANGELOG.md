@@ -2,6 +2,23 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.3] - 2025-12-30
+
+### Added
+- **Enhanced Cache Summary Dialog**:
+  - Redesigned Cache Summary from simple message box to interactive table format with 4 columns: Provider, Package Count, Last Updated, and Actions.
+  - **Cache Freshness Tracking**: Added `get_cache_freshness()` method to metadata cache service to retrieve last update timestamp for each provider.
+  - **Time Ago Formatting**: Human-readable cache age display (e.g., "2 hours ago", "3 days ago", "Just now", "Never").
+  - **Individual Refresh Buttons**: Each provider (WinGet, Chocolatey, Scoop) has its own "Refresh" button for selective cache updates.
+  - **Refresh All Button**: One-click refresh for all providers sequentially with progress feedback.
+  - **Live Updates**: Table data and main window tab counts automatically update after cache refresh.
+  - **Visual Feedback**: Dialog title shows current operation status with success indicators (✓) and auto-revert after 2 seconds.
+  - **Smart Button Management**: All refresh buttons disabled during operations to prevent concurrent refreshes.
+  - **Installed Packages Row**: Shows live registry-scanned package count with "Live" status indicator.
+  - **Professional Table Layout**: Proper column sizing, centered alignment for numbers, bold text for summary rows, and visual separators.
+
+---
+
 ## [0.5.2a] - 2025-12-30
 
 ### Fixed

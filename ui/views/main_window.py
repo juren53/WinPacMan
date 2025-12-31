@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QPushButton, QComboBox, QStatusBar, QApplication,
     QInputDialog, QDialog, QDialogButtonBox, QCheckBox, QTextEdit,
     QMenuBar, QMenu, QLineEdit, QTabWidget, QRadioButton, QButtonGroup,
-    QTextBrowser
+    QTextBrowser, QTableWidget, QTableWidgetItem, QHeaderView
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from PyQt6.QtGui import QFont, QAction
@@ -328,29 +328,273 @@ class WinPacManMainWindow(QMainWindow):
         help_menu.addAction(about_action)
 
     def show_cache_summary(self):
-        """Show a dialog with a summary of the package cache."""
-        total_count = self.metadata_cache.get_package_count()
-        winget_count = self.metadata_cache.get_package_count('winget')
-        chocolatey_count = self.metadata_cache.get_package_count('chocolatey')
-        scoop_count = self.metadata_cache.get_package_count('scoop')
+        """Show a dialog with a summary of the package cache in table format."""
+        from datetime import datetime
 
-        summary_text = f"""
-        <h2>Package Cache Summary</h2>
-        <p><b>Total Packages:</b> {total_count:,}</p>
-        <hr>
-        <h4>Breakdown by Provider:</h4>
-        <ul>
-            <li><b>WinGet:</b> {winget_count:,} packages</li>
-            <li><b>Chocolatey:</b> {chocolatey_count:,} packages</li>
-            <li><b>Scoop:</b> {scoop_count:,} packages</li>
-        </ul>
-        """
+        # Helper function to format time ago
+        def format_time_ago(dt: datetime) -> str:
+            """Format datetime as 'X time ago' string."""
+            if not dt:
+                return "Never"
 
-        QMessageBox.information(
-            self,
-            "Cache Summary",
-            summary_text
-        )
+            now = datetime.now()
+            delta = now - dt
+
+            seconds = delta.total_seconds()
+
+            if seconds < 60:
+                return "Just now"
+            elif seconds < 3600:
+                minutes = int(seconds / 60)
+                return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+            elif seconds < 86400:
+                hours = int(seconds / 3600)
+                return f"{hours} hour{'s' if hours != 1 else ''} ago"
+            elif seconds < 604800:
+                days = int(seconds / 86400)
+                return f"{days} day{'s' if days != 1 else ''} ago"
+            elif seconds < 2592000:
+                weeks = int(seconds / 604800)
+                return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+            else:
+                months = int(seconds / 2592000)
+                return f"{months} month{'s' if months != 1 else ''} ago"
+
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Cache Summary")
+        dialog.setMinimumWidth(750)
+        dialog.setMinimumHeight(400)
+
+        layout = QVBoxLayout(dialog)
+
+        # Title
+        title_label = QLabel("<h2>Package Cache Summary</h2>")
+        layout.addWidget(title_label)
+
+        # Create table with refresh button column
+        table = QTableWidget()
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["Provider", "Package Count", "Last Updated", "Actions"])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        table.verticalHeader().setVisible(False)
+        table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+
+        # Function to refresh table data
+        def refresh_table_data():
+            """Update table with current cache data."""
+            # Clear existing rows
+            table.setRowCount(0)
+
+            provider_total = 0
+            row_index = 0
+
+            # Populate provider rows
+            for display_name, manager_name in providers:
+                count = self.metadata_cache.get_package_count(manager_name)
+                freshness = self.metadata_cache.get_cache_freshness(manager_name)
+                freshness_str = format_time_ago(freshness)
+
+                provider_total += count
+
+                table.insertRow(row_index)
+                table.setItem(row_index, 0, QTableWidgetItem(display_name))
+                table.setItem(row_index, 1, QTableWidgetItem(f"{count:,}"))
+                table.setItem(row_index, 2, QTableWidgetItem(freshness_str))
+
+                # Center align count and freshness columns
+                table.item(row_index, 1).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                table.item(row_index, 2).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                # Add refresh button
+                refresh_btn = QPushButton("Refresh")
+                refresh_btn.setMaximumWidth(80)
+
+                # Use closure to capture manager_name
+                def make_refresh_handler(mgr_name, mgr_display):
+                    def handler():
+                        refresh_provider(mgr_name, mgr_display)
+                    return handler
+
+                refresh_btn.clicked.connect(make_refresh_handler(manager_name, display_name))
+                table.setCellWidget(row_index, 3, refresh_btn)
+
+                row_index += 1
+
+            # Add separator row
+            table.insertRow(row_index)
+            for col in range(4):
+                table.setItem(row_index, col, QTableWidgetItem(""))
+                table.item(row_index, col).setBackground(Qt.GlobalColor.lightGray)
+            table.setRowHeight(row_index, 2)
+            row_index += 1
+
+            # Add installed packages row
+            installed_packages = self.metadata_cache.get_installed_packages()
+            installed_count = len(installed_packages)
+
+            table.insertRow(row_index)
+            table.setItem(row_index, 0, QTableWidgetItem("Installed"))
+            table.setItem(row_index, 1, QTableWidgetItem(f"{installed_count:,}"))
+            table.setItem(row_index, 2, QTableWidgetItem("Live"))
+            table.setItem(row_index, 3, QTableWidgetItem(""))
+
+            # Bold the installed row
+            font = table.item(row_index, 0).font()
+            font.setBold(True)
+            for col in range(3):
+                table.item(row_index, col).setFont(font)
+            table.item(row_index, 1).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            table.item(row_index, 2).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            row_index += 1
+
+            # Add another separator
+            table.insertRow(row_index)
+            for col in range(4):
+                table.setItem(row_index, col, QTableWidgetItem(""))
+                table.item(row_index, col).setBackground(Qt.GlobalColor.lightGray)
+            table.setRowHeight(row_index, 2)
+            row_index += 1
+
+            # Add total row
+            total_count = provider_total + installed_count
+            table.insertRow(row_index)
+            table.setItem(row_index, 0, QTableWidgetItem("Total"))
+            table.setItem(row_index, 1, QTableWidgetItem(f"{total_count:,}"))
+            table.setItem(row_index, 2, QTableWidgetItem(""))
+            table.setItem(row_index, 3, QTableWidgetItem(""))
+
+            # Bold the total row
+            font = table.item(row_index, 0).font()
+            font.setBold(True)
+            for col in range(3):
+                table.item(row_index, col).setFont(font)
+            table.item(row_index, 1).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Function to refresh a specific provider
+        def refresh_provider(manager_name: str, display_name: str):
+            """Refresh cache for a specific provider."""
+            # Disable all refresh buttons during operation
+            for row in range(table.rowCount()):
+                widget = table.cellWidget(row, 3)
+                if widget and isinstance(widget, QPushButton):
+                    widget.setEnabled(False)
+
+            # Show progress in status
+            title_label.setText(f"<h2>Package Cache Summary - Refreshing {display_name}...</h2>")
+            QApplication.processEvents()
+
+            try:
+                # Refresh the cache
+                self.metadata_cache.refresh_cache(manager=manager_name, force=True)
+
+                # Update table data
+                refresh_table_data()
+
+                # Update tab counts in main window
+                self.update_tab_counts()
+
+                # Show success
+                title_label.setText(f"<h2>Package Cache Summary - {display_name} Refreshed ✓</h2>")
+
+                # Reset title after 2 seconds
+                QTimer.singleShot(2000, lambda: title_label.setText("<h2>Package Cache Summary</h2>"))
+
+            except Exception as e:
+                # Show error
+                title_label.setText("<h2>Package Cache Summary</h2>")
+                QMessageBox.critical(
+                    dialog,
+                    "Refresh Failed",
+                    f"Failed to refresh {display_name} cache:\n{str(e)}"
+                )
+
+            # Re-enable all refresh buttons
+            for row in range(table.rowCount()):
+                widget = table.cellWidget(row, 3)
+                if widget and isinstance(widget, QPushButton):
+                    widget.setEnabled(True)
+
+        # Function to refresh all providers
+        def refresh_all_providers():
+            """Refresh cache for all providers."""
+            # Disable buttons
+            refresh_all_btn.setEnabled(False)
+            for row in range(table.rowCount()):
+                widget = table.cellWidget(row, 3)
+                if widget and isinstance(widget, QPushButton):
+                    widget.setEnabled(False)
+
+            title_label.setText("<h2>Package Cache Summary - Refreshing All Providers...</h2>")
+            QApplication.processEvents()
+
+            try:
+                # Refresh all providers
+                for display_name, manager_name in providers:
+                    title_label.setText(f"<h2>Package Cache Summary - Refreshing {display_name}...</h2>")
+                    QApplication.processEvents()
+                    self.metadata_cache.refresh_cache(manager=manager_name, force=True)
+
+                # Update table data
+                refresh_table_data()
+
+                # Update tab counts in main window
+                self.update_tab_counts()
+
+                # Show success
+                title_label.setText("<h2>Package Cache Summary - All Providers Refreshed ✓</h2>")
+                QTimer.singleShot(2000, lambda: title_label.setText("<h2>Package Cache Summary</h2>"))
+
+            except Exception as e:
+                title_label.setText("<h2>Package Cache Summary</h2>")
+                QMessageBox.critical(
+                    dialog,
+                    "Refresh Failed",
+                    f"Failed to refresh cache:\n{str(e)}"
+                )
+
+            # Re-enable buttons
+            refresh_all_btn.setEnabled(True)
+            for row in range(table.rowCount()):
+                widget = table.cellWidget(row, 3)
+                if widget and isinstance(widget, QPushButton):
+                    widget.setEnabled(True)
+
+        # Get data for each provider
+        providers = [
+            ('WinGet', 'winget'),
+            ('Chocolatey', 'chocolatey'),
+            ('Scoop', 'scoop')
+        ]
+
+        # Initial table population
+        refresh_table_data()
+
+        layout.addWidget(table)
+
+        # Button layout
+        button_layout = QHBoxLayout()
+
+        # Refresh All button
+        refresh_all_btn = QPushButton("Refresh All")
+        refresh_all_btn.clicked.connect(refresh_all_providers)
+        button_layout.addWidget(refresh_all_btn)
+
+        button_layout.addStretch()
+
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.reject)
+        button_layout.addWidget(close_btn)
+
+        layout.addLayout(button_layout)
+
+        dialog.exec()
 
     def get_active_tab_name(self) -> str:
         """Get the name of the currently active tab (without count)."""

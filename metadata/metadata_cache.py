@@ -292,6 +292,31 @@ class MetadataCacheService:
 
         return count
 
+    def get_cache_freshness(self, manager: str) -> Optional[datetime]:
+        """
+        Get the last cache update timestamp for a specific manager.
+
+        Args:
+            manager: Manager name (winget, chocolatey, scoop, etc.)
+
+        Returns:
+            datetime of last cache update, or None if no cache exists
+        """
+        conn = sqlite3.connect(self.cache_db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT MAX(cache_timestamp) FROM packages
+            WHERE manager = ? AND is_installed = 0
+        """, (manager,))
+
+        result = cursor.fetchone()[0]
+        conn.close()
+
+        if result:
+            return datetime.fromtimestamp(result)
+        return None
+
     def _clear_manager_cache(self, manager: str):
         """
         Clear all cached packages for a specific manager.
