@@ -2,6 +2,44 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.3d] - 2025-12-31
+
+### Added
+- **NPM Package Provider**:
+  - Added NPM (Node Package Manager) as fourth package provider for metadata cache system.
+  - Created `npm_fetcher.py` - NPM Registry API fetcher using JSON-based REST API.
+  - Created `npm_provider.py` - NPM metadata provider implementing MetadataProvider interface.
+  - Search packages via NPM search API (`https://registry.npmjs.org/-/v1/search`).
+  - Get individual package details via registry API (`https://registry.npmjs.org/<package-name>`).
+  - Fetch 1,000 popular packages for cache population (NPM has ~2-3 million packages).
+  - Uses keyword search strategy to identify popular packages (react, vue, typescript, express, etc.).
+  - Rich metadata available: author, license, homepage, tags, description.
+  - Clean JSON responses - no XML parsing needed.
+  - Added NPM to Cache Summary dialog with refresh button.
+  - Added `CARGO` to PackageManager enum in core/models.py.
+
+- **Cargo Package Provider**:
+  - Added Cargo (Rust crates.io) as fifth package provider for metadata cache system.
+  - Created `cargo_fetcher.py` - Cargo Sparse Index fetcher using modern sparse index protocol.
+  - Created `cargo_provider.py` - Cargo metadata provider implementing MetadataProvider interface.
+  - Uses Sparse Index API (`https://index.crates.io/`) - no Git clone needed (fast and efficient).
+  - Prefix calculation logic for sparse index URLs (1/a, 2/ab, 3/a/abc, se/rd/serde).
+  - Newline-delimited JSON (NDJSON) format parsing for crate versions.
+  - Automatic yanked (removed) version filtering to show only active releases.
+  - Search crates via crates.io API (`https://crates.io/api/v1/crates`).
+  - Get crate details via sparse index with version comparison to find latest.
+  - Fetch 1,000 popular crates for cache population (crates.io has ~140,000 crates).
+  - Added Cargo to Cache Summary dialog with refresh button.
+  - Added `NPM` to PackageManager enum in core/models.py.
+
+### Fixed
+- **NPM Cache Refresh**:
+  - Fixed NPM refresh aborting immediately with 0 packages.
+  - Renamed `fetch_popular_packages()` to `fetch_all_packages()` to match metadata cache interface.
+  - Method still fetches 1,000 popular packages (not millions) using keyword search strategy.
+
+---
+
 ## [0.5.3c] - 2025-12-30
 
 ### Fixed
