@@ -181,6 +181,11 @@ class WinPacManMainWindow(QMainWindow):
         self.list_installed_btn.clicked.connect(self.list_installed_packages)
         layout.addWidget(self.list_installed_btn)
 
+        # Refresh Installed button
+        self.refresh_installed_btn = QPushButton("Refresh Installed")
+        self.refresh_installed_btn.clicked.connect(self.refresh_installed_packages)
+        layout.addWidget(self.refresh_installed_btn)
+
         # Uninstall button
         self.uninstall_btn = QPushButton("Uninstall")
         self.uninstall_btn.clicked.connect(self.uninstall_package)
@@ -669,8 +674,73 @@ class WinPacManMainWindow(QMainWindow):
         return f"v{version} ({date_time})"
 
     def list_installed_packages(self):
-        """List installed packages in the shared table."""
+        """List installed packages from cache (fast)."""
         print("[MainWindow] list_installed_packages called")
+        if self.operation_in_progress:
+            print("[MainWindow] Operation already in progress, showing warning")
+            QMessageBox.warning(
+                self,
+                "Operation In Progress",
+                "Please wait for the current operation to complete."
+            )
+            return
+
+        try:
+            # Get installed packages from cache
+            tab_name = self.get_active_tab_name()
+            managers_filter = self.get_active_managers()
+
+            installed = self.metadata_cache.get_installed_packages(managers=managers_filter)
+
+            # Check if cache is empty (first time)
+            if not installed:
+                reply = QMessageBox.question(
+                    self,
+                    "Refresh Installed Packages",
+                    "No installed packages in cache. Would you like to scan the Windows Registry now?\n\n"
+                    "This takes 1-2 seconds and updates the installed packages cache.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.refresh_installed_packages()
+                return
+
+            # Convert to Package objects with smart manager resolution
+            packages = [m.to_package(cache_service=self.metadata_cache) for m in installed]
+
+            # Store and display in shared table
+            self.current_packages = packages
+            self.package_table.set_packages(packages)
+            self.table_mode = 'installed'  # Track that table now shows installed packages
+
+            # Disable both buttons until a package is selected
+            self.install_btn.setEnabled(False)
+            self.uninstall_btn.setEnabled(False)
+            self.selected_package = None
+
+            # Update status
+            package_word = "package" if len(packages) == 1 else "packages"
+            source_desc = tab_name if managers_filter else "All Packages"
+            self.persistent_status = f"{len(packages)} installed {package_word} (from cache)"
+            self.status_label.setText(self.persistent_status)
+
+            print(f"[MainWindow] Loaded {len(packages)} installed packages from cache")
+
+        except Exception as e:
+            print(f"[MainWindow] Error loading installed packages: {e}")
+            import traceback
+            traceback.print_exc()
+
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to load installed packages:\n{str(e)}"
+            )
+
+    def refresh_installed_packages(self):
+        """Refresh installed packages cache by scanning Windows Registry."""
+        print("[MainWindow] refresh_installed_packages called")
         if self.operation_in_progress:
             print("[MainWindow] Operation already in progress, showing warning")
             QMessageBox.warning(
@@ -712,14 +782,14 @@ class WinPacManMainWindow(QMainWindow):
             # Update status
             package_word = "package" if len(packages) == 1 else "packages"
             source_desc = tab_name if managers_filter else "All Packages"
-            self.persistent_status = f"{len(packages)} installed {package_word} loaded from {source_desc}"
+            self.persistent_status = f"{len(packages)} installed {package_word} (refreshed)"
             self.status_label.setText(self.persistent_status)
             self.progress_label.setVisible(False)
 
-            print(f"[MainWindow] Loaded {len(packages)} installed packages from registry")
+            print(f"[MainWindow] Refreshed {len(packages)} installed packages from registry")
 
         except Exception as e:
-            print(f"[MainWindow] Error syncing installed packages: {e}")
+            print(f"[MainWindow] Error refreshing installed packages: {e}")
             import traceback
             traceback.print_exc()
 
@@ -727,7 +797,7 @@ class WinPacManMainWindow(QMainWindow):
             QMessageBox.critical(
                 self,
                 "Error",
-                f"Failed to load installed packages from registry:\n{str(e)}"
+                f"Failed to refresh installed packages:\n{str(e)}"
             )
 
     def on_package_selected(self, package: Package):
@@ -1752,6 +1822,7 @@ class WinPacManMainWindow(QMainWindow):
         """Disable controls during operation."""
         self.repo_tabs.setEnabled(False)
         self.list_installed_btn.setEnabled(False)
+        self.refresh_installed_btn.setEnabled(False)
         self.search_btn.setEnabled(False)
         self.install_btn.setEnabled(False)
         self.uninstall_btn.setEnabled(False)
@@ -1760,6 +1831,7 @@ class WinPacManMainWindow(QMainWindow):
         """Enable controls after operation."""
         self.repo_tabs.setEnabled(True)
         self.list_installed_btn.setEnabled(True)
+        self.refresh_installed_btn.setEnabled(True)
 
         # Only enable search if there's text in the search box
         self.search_btn.setEnabled(len(self.search_input.text().strip()) > 0)
