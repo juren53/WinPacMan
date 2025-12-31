@@ -6,10 +6,10 @@ color coding and sorting capabilities.
 """
 
 from PyQt6.QtWidgets import (
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QMenu
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QAction
 from typing import List, Optional
 
 from core.models import Package, PackageManager, PackageStatus
@@ -29,6 +29,7 @@ class PackageTableWidget(QTableWidget):
     # Signals
     package_selected = pyqtSignal(Package)
     package_double_clicked = pyqtSignal(Package)
+    search_in_available_requested = pyqtSignal(str)  # Emits package name to search
     
     # Color scheme for package managers
     MANAGER_COLORS = {
@@ -85,6 +86,10 @@ class PackageTableWidget(QTableWidget):
         # Connect signals
         self.itemDoubleClicked.connect(self._on_double_click)
         self.itemSelectionChanged.connect(self._on_selection_changed)
+
+        # Enable context menu
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
     
     def set_packages(self, packages: List[Package]):
         """
@@ -209,7 +214,34 @@ class PackageTableWidget(QTableWidget):
         package = self.get_selected_package()
         if package:
             self.package_double_clicked.emit(package)
-    
+
+    def _show_context_menu(self, position):
+        """
+        Show context menu on right-click.
+
+        Args:
+            position: Position where the menu was requested
+        """
+        # Get the package at the clicked position
+        item = self.itemAt(position)
+        if not item:
+            return
+
+        package = self.get_selected_package()
+        if not package:
+            return
+
+        # Create context menu
+        menu = QMenu(self)
+
+        # Add "Search in Available Packages" action
+        search_action = QAction(f'Search "{package.name}" in Available Packages', self)
+        search_action.triggered.connect(lambda: self.search_in_available_requested.emit(package.name))
+        menu.addAction(search_action)
+
+        # Show menu at cursor position
+        menu.exec(self.viewport().mapToGlobal(position))
+
     def clear_packages(self):
         """Clear all packages from the table."""
         self.packages = []

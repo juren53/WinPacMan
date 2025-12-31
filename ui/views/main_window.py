@@ -160,6 +160,7 @@ class WinPacManMainWindow(QMainWindow):
         self.package_table = PackageTableWidget()
         self.package_table.package_double_clicked.connect(self.on_package_details)
         self.package_table.package_selected.connect(self.on_package_selected)
+        self.package_table.search_in_available_requested.connect(self.on_search_in_available_requested)
         main_layout.addWidget(self.package_table)
 
         # Status bar at bottom
@@ -741,6 +742,24 @@ class WinPacManMainWindow(QMainWindow):
             elif self.table_mode == 'available':
                 self.install_btn.setEnabled(True)
                 self.uninstall_btn.setEnabled(False)
+
+    def on_search_in_available_requested(self, package_name: str):
+        """
+        Handle request to search for a package in available packages.
+
+        This is triggered from the package table context menu (right-click).
+        Useful for researching 'Unknown' provider packages.
+
+        Args:
+            package_name: Name of the package to search for
+        """
+        print(f"[MainWindow] Searching for '{package_name}' in available packages from context menu")
+
+        # Set the search text
+        self.search_input.setText(package_name)
+
+        # Trigger the search
+        self.search_packages()
 
     def on_tab_changed(self, index: int):
         """Handle repository tab change - clear table."""
