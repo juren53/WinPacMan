@@ -83,9 +83,49 @@ This is a **legitimate API limitation**, not an arbitrary code limit.
 - Some Chocolatey packages won't appear in search results
 - Users may not find less popular packages in WinPacMan
 
-## Potential Workarounds
+## BREAKTHROUGH SOLUTION ✅
 
-### Option 1: Accept the Limitation (Recommended for now)
+### SkipToken-Based Pagination Workaround
+
+**Status:** VIABLE SOLUTION FOUND (2025-12-30)
+
+**Discovery:** The Chocolatey API uses cursor-based pagination (`$skiptoken`) instead of offset-based (`$skip`) for accessing packages beyond 10,000!
+
+**How It Works:**
+1. Use standard `$skip` pagination for packages 0-9,999
+2. After 9,999, the API provides a "next" link with `$skiptoken` parameter
+3. Follow the `$skiptoken` links to access ALL remaining packages
+4. Example next link: `http://community.chocolatey.org/api/v2/Packages?$filter=IsLatestVersion%20eq%20true&$orderby=Id&$skiptoken='vscode-live-share'`
+
+**Implementation Strategy:**
+```python
+# Pseudo-code
+current_url = initial_url_with_params
+while current_url:
+    response = get(current_url)
+    packages = parse_packages(response)
+    yield packages
+
+    # Get next link from XML
+    next_link = extract_next_link(response)
+    current_url = next_link  # May use $skip or $skiptoken
+```
+
+**Advantages:**
+- ✅ Access ALL packages in repository
+- ✅ Official API mechanism (not a hack)
+- ✅ Reliable and supported
+- ✅ No need for complex filtering strategies
+
+**Implementation Effort:** Low-Medium
+**Estimated Time:** 1-2 hours
+
+**Files to Modify:**
+- `metadata/sync/chocolatey_odata_fetcher.py` - Update fetch loop to follow next links
+
+## Alternative Workarounds (Less Preferred)
+
+### Option 1: Accept the Limitation (~~Recommended for now~~ SUPERSEDED)
 - **Effort:** Low
 - **Action:** Document limitation in UI and user documentation
 - **Pros:** No code changes needed, honest about API limits
@@ -120,16 +160,30 @@ This is a **legitimate API limitation**, not an arbitrary code limit.
 - **Pros:** Official solution, benefits all consumers
 - **Cons:** No guarantee of implementation, may take time
 
-## Recommendation
+## Recommendation (UPDATED)
 
-**Short Term (Immediate):**
-1. Document the limitation in Cache Summary dialog
-2. Add tooltip explaining "Chocolatey: 10,000 (API limit - ~1,000 additional packages exist)"
-3. Update help documentation
+**NEW RECOMMENDED APPROACH:** ✅ Implement SkipToken Pagination
 
-**Long Term (Future Enhancement):**
-1. Investigate Option 2 (Multiple Filter Strategies) for v0.6.x
-2. Consider Option 5 (Request API Enhancement) - file issue with Chocolatey team
+**Implementation Steps:**
+1. Modify `chocolatey_odata_fetcher.py`:
+   - Remove `MAX_PACKAGES = 10000` limit
+   - Change pagination to follow "next" links from XML response
+   - Extract and parse `<link rel="next">` elements
+   - Continue until no next link exists
+2. Test with full repository fetch
+3. Update progress reporting to show actual counts
+
+**Timeline:** Can be implemented in next development session (1-2 hours)
+
+**Expected Results:**
+- Fetch ALL ~11,000 Chocolatey packages
+- No missing packages
+- Use official API pagination mechanism
+- More reliable than offset-based pagination
+
+**Old Recommendations (SUPERSEDED):**
+- ~~Short Term: Document the limitation~~
+- ~~Long Term: Investigate multi-filter strategies~~
 
 ## Technical Notes
 
@@ -144,6 +198,28 @@ Current Query:
   $orderby: Id
   $skip: 0-9999 (works), 10000+ (fails with 406)
   $top: 100 (ignored by API, returns ~40 per page)
+
+SOLUTION - Follow Next Links:
+  Initial: /Packages?$filter=IsLatestVersion eq true&$orderby=Id
+  Page 1-250: Uses $skip parameter (0, 40, 80, ... 9960)
+  Page 251+: Uses $skiptoken parameter (e.g., $skiptoken='vscode-live-share')
+
+Next Link Format:
+  <link rel="next" href="http://community.chocolatey.org/api/v2/Packages?$filter=...&$skiptoken='packageId'" />
+
+Pagination Types:
+  1. Offset-based: $skip=N (limited to 10,000)
+  2. Cursor-based: $skiptoken='id' (unlimited, used after 10,000)
+```
+
+**XML Response Structure:**
+```xml
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <link rel="next" href="...next page URL..." />
+  <entry>...</entry>
+  <entry>...</entry>
+  ...
+</feed>
 ```
 
 ### Error Response
