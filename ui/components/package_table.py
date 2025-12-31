@@ -51,9 +51,12 @@ class PackageTableWidget(QTableWidget):
         """Configure table structure and behavior."""
         # Set column count and headers
         self.setColumnCount(4)
-        self.setHorizontalHeaderLabels([
-            "Package Name", "Version", "Manager", "Description"
-        ])
+        header_labels = ["Package Name", "Version", "Manager", "Description"]
+        for col, label in enumerate(header_labels):
+            header_item = QTableWidgetItem(label)
+            header_item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            self.horizontalHeaderItem(col) # Ensure item exists
+            self.setHorizontalHeaderItem(col, header_item)
         
         # Configure column widths
         header = self.horizontalHeader()

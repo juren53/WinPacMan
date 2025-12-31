@@ -2,6 +2,20 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] - 2025-12-30
+
+### Changed
+- **UI Redesign - Functional Partition with Single Shared Table**:
+  - Redesigned main window to clearly separate Installed and Available package functions while maximizing screen space.
+  - **Left side controls**: "List Installed Packages" button and "Uninstall" button for installed packages.
+  - **Right side controls**: Search box with "Search" button and "Install" button for available packages.
+  - **Single large shared table**: Replaced dual tables with one large table that displays either installed or available packages, providing more room for package details.
+  - **Smart button logic**: Automatically enables only the appropriate button (Uninstall or Install) based on what's currently displayed in the table.
+  - Removed Package Source radio buttons (Installed/Available toggle) - no longer needed with the new design.
+  - Compact control layout eliminates wasted vertical space, giving maximum area to the package table.
+
+---
+
 ## [0.5.1e] - 2025-12-27
 
 ### Fixed

@@ -74,7 +74,7 @@ class WinPacManMainWindow(QMainWindow):
         self.current_uninstall_worker: Optional[PackageUninstallWorker] = None
         self.selected_package: Optional[Package] = None
         self.verbose_mode = False  # Show detailed package manager output
-        self.current_source = 'available'  # 'installed' or 'available'
+        self.table_mode = None  # 'installed' or 'available' - tracks what's currently in the table
 
         # Animated spinner for progress indication
         self.spinner_frames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]
@@ -84,7 +84,7 @@ class WinPacManMainWindow(QMainWindow):
         self.progress_message = ""
 
         # Persistent status message (shows package count)
-        self.persistent_status = "Viewing: Available packages - All Packages"
+        self.persistent_status = "Ready"
 
         # Setup
         self.init_window()
@@ -109,63 +109,97 @@ class WinPacManMainWindow(QMainWindow):
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(10)
 
-        # Source toggle (Installed vs Available)
-        source_layout = self.create_source_toggle()
-        main_layout.addLayout(source_layout)
-
-        # Repository tabs
+        # Repository tabs at the top
         self.create_repository_tabs()
         main_layout.addWidget(self.repo_tabs)
 
-        # Control panel
-        control_layout = self.create_control_panel()
-        main_layout.addLayout(control_layout)
+        # Create horizontal control panel (Left: Installed controls, Right: Available controls)
+        control_layout = QHBoxLayout()
+        control_layout.setSpacing(20)
+        control_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Package table
+        # Left side - Installed Packages controls
+        left_controls = self.create_installed_controls()
+        control_layout.addLayout(left_controls, 1)
+
+        # Right side - Available Packages controls
+        right_controls = self.create_available_controls()
+        control_layout.addLayout(right_controls, 1)
+
+        main_layout.addLayout(control_layout)
+        main_layout.setSpacing(5)  # Reduce spacing between control panel and table
+
+        # Single large package table (shared by both functions)
         self.package_table = PackageTableWidget()
-        self.package_table.package_double_clicked.connect(
-            self.on_package_details
-        )
-        self.package_table.package_selected.connect(
-            self.on_package_selected
-        )
+        self.package_table.package_double_clicked.connect(self.on_package_details)
+        self.package_table.package_selected.connect(self.on_package_selected)
         main_layout.addWidget(self.package_table)
 
         # Status bar at bottom
         self.create_status_bar()
 
-    def create_source_toggle(self) -> QHBoxLayout:
-        """Create source toggle (Installed vs Available packages)."""
-        layout = QHBoxLayout()
-        layout.setSpacing(10)
+    def create_installed_controls(self) -> QVBoxLayout:
+        """Create left side controls for Installed packages."""
+        layout = QVBoxLayout()
+        layout.setSpacing(5)
 
-        # Label
-        source_label = QLabel("Package Source:")
-        source_label.setStyleSheet("font-weight: bold; font-size: 10pt;")
-        layout.addWidget(source_label)
+        # Header
+        header = QLabel("Installed Packages")
+        header.setStyleSheet("font-weight: bold; font-size: 11pt;")
+        layout.addWidget(header)
 
-        # Radio buttons
-        self.installed_radio = QRadioButton("Installed")
-        self.installed_radio.setToolTip("View packages installed on your system")
+        # List Installed Packages button
+        self.list_installed_btn = QPushButton("List Installed Packages")
+        self.list_installed_btn.clicked.connect(self.list_installed_packages)
+        layout.addWidget(self.list_installed_btn)
 
-        self.available_radio = QRadioButton("Available")
-        self.available_radio.setToolTip("View packages available in remote repositories")
-        self.available_radio.setChecked(True)  # Default to Available
+        # Uninstall button
+        self.uninstall_btn = QPushButton("Uninstall")
+        self.uninstall_btn.clicked.connect(self.uninstall_package)
+        self.uninstall_btn.setEnabled(False)  # Disabled until data appears
+        layout.addWidget(self.uninstall_btn)
 
-        # Button group (ensures mutual exclusivity)
-        self.source_button_group = QButtonGroup()
-        self.source_button_group.addButton(self.installed_radio, 0)
-        self.source_button_group.addButton(self.available_radio, 1)
+        return layout
 
-        # Connect signals
-        self.installed_radio.toggled.connect(lambda checked: self.on_source_changed('installed') if checked else None)
-        self.available_radio.toggled.connect(lambda checked: self.on_source_changed('available') if checked else None)
+    def create_available_controls(self) -> QVBoxLayout:
+        """Create right side controls for Available packages."""
+        layout = QVBoxLayout()
+        layout.setSpacing(5)
 
-        layout.addWidget(self.installed_radio)
-        layout.addWidget(self.available_radio)
+        # Header
+        header = QLabel("Available Packages")
+        header.setStyleSheet("font-weight: bold; font-size: 11pt;")
+        layout.addWidget(header)
 
-        # Spacer to push toggle to left
-        layout.addStretch()
+        # Search box layout
+        search_layout = QHBoxLayout()
+        search_label = QLabel("Search:")
+        search_layout.addWidget(search_label)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search available packages...")
+        self.search_input.textChanged.connect(self.on_search_text_changed)
+        self.search_input.returnPressed.connect(self.search_packages)
+        search_layout.addWidget(self.search_input)
+
+        self.search_btn = QPushButton("Search")
+        self.search_btn.clicked.connect(self.search_packages)
+        self.search_btn.setEnabled(False)  # Disabled until user types
+        search_layout.addWidget(self.search_btn)
+
+        layout.addLayout(search_layout)
+
+        # Install button
+        self.install_btn = QPushButton("Install")
+        self.install_btn.clicked.connect(self.install_package)
+        self.install_btn.setEnabled(False)  # Disabled until data appears
+        layout.addWidget(self.install_btn)
+
+        # Progress label (shows loading status)
+        self.progress_label = QLabel("")
+        self.progress_label.setVisible(False)
+        self.progress_label.setStyleSheet("color: #0078d4; font-weight: bold;")
+        layout.addWidget(self.progress_label)
 
         return layout
 
@@ -228,64 +262,6 @@ class WinPacManMainWindow(QMainWindow):
         except Exception as e:
             print(f"[MainWindow] Error updating tab counts: {e}")
 
-    def create_control_panel(self) -> QHBoxLayout:
-        """Create control panel with search and action buttons."""
-        layout = QHBoxLayout()
-        layout.setSpacing(10)
-
-        # Search box
-        search_label = QLabel("Search:")
-        layout.addWidget(search_label)
-
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search packages in active tab...")
-        self.search_input.setFixedWidth(250)
-        self.search_input.textChanged.connect(self.on_search_text_changed)
-        self.search_input.returnPressed.connect(self.search_packages)
-        layout.addWidget(self.search_input)
-
-        # Search button
-        self.search_btn = QPushButton("Search")
-        self.search_btn.clicked.connect(self.search_packages)
-        self.search_btn.setEnabled(False)  # Disabled until user types
-        layout.addWidget(self.search_btn)
-
-        # Spacer
-        layout.addStretch()
-
-        # Progress label (shows loading status)
-        self.progress_label = QLabel("")
-        self.progress_label.setVisible(False)
-        self.progress_label.setStyleSheet("color: #0078d4; font-weight: bold;")
-        layout.addWidget(self.progress_label)
-
-        # Refresh button
-        self.refresh_btn = QPushButton("Refresh")
-        self.refresh_btn.clicked.connect(self.refresh_packages)
-        layout.addWidget(self.refresh_btn)
-
-        # Install button
-        self.install_btn = QPushButton("Install")
-        self.install_btn.clicked.connect(self.install_package)
-        self.install_btn.setEnabled(False)
-        layout.addWidget(self.install_btn)
-
-        # Uninstall button
-        self.uninstall_btn = QPushButton("Uninstall")
-        self.uninstall_btn.clicked.connect(self.uninstall_package)
-        self.uninstall_btn.setEnabled(False)
-        layout.addWidget(self.uninstall_btn)
-
-        # Spacer to push version to far right
-        layout.addStretch()
-
-        # Version label in upper right corner
-        version_text = self._get_version_info()
-        self.version_label = QLabel(version_text)
-        self.version_label.setStyleSheet("color: #808080; font-size: 9pt;")  # Subdued gray color
-        layout.addWidget(self.version_label)
-
-        return layout
 
     def create_status_bar(self):
         """Create status bar."""
@@ -411,9 +387,9 @@ class WinPacManMainWindow(QMainWindow):
 
         return f"v{version} ({date_time})"
 
-    def refresh_packages(self):
-        """Refresh package list using QThread worker for active tab."""
-        print("[MainWindow] refresh_packages called")
+    def list_installed_packages(self):
+        """List installed packages in the shared table."""
+        print("[MainWindow] list_installed_packages called")
         if self.operation_in_progress:
             print("[MainWindow] Operation already in progress, showing warning")
             QMessageBox.warning(
@@ -422,23 +398,6 @@ class WinPacManMainWindow(QMainWindow):
                 "Please wait for the current operation to complete."
             )
             return
-
-        # Check current source
-        source_label = "Installed" if self.current_source == 'installed' else "Available"
-
-        # Available packages - inform user to use search instead
-        if self.current_source == 'available':
-            QMessageBox.information(
-                self,
-                "Refresh Available Packages",
-                "Available packages are loaded from the metadata cache.\n\n"
-                "Use the Search feature to find available packages.\n\n"
-                "To refresh the metadata cache, use Config → View Configuration."
-            )
-            return
-
-        # Installed packages - use registry-based sync
-        print("[MainWindow] Using registry-based sync for installed packages")
 
         # Show progress
         self.status_label.setText("Scanning Windows Registry for installed packages...")
@@ -458,7 +417,16 @@ class WinPacManMainWindow(QMainWindow):
 
             # Convert to Package objects with smart manager resolution
             packages = [m.to_package(cache_service=self.metadata_cache) for m in installed]
+
+            # Store and display in shared table
+            self.current_packages = packages
             self.package_table.set_packages(packages)
+            self.table_mode = 'installed'  # Track that table now shows installed packages
+
+            # Disable both buttons until a package is selected
+            self.install_btn.setEnabled(False)
+            self.uninstall_btn.setEnabled(False)
+            self.selected_package = None
 
             # Update status
             package_word = "package" if len(packages) == 1 else "packages"
@@ -481,39 +449,30 @@ class WinPacManMainWindow(QMainWindow):
                 f"Failed to load installed packages from registry:\n{str(e)}"
             )
 
-    def on_source_changed(self, source: str):
-        """Handle package source change (Installed vs Available)."""
-        self.current_source = source
-        source_label = "Installed" if source == 'installed' else "Available"
+    def on_package_selected(self, package: Package):
+        """Handle package selection - enable appropriate button based on table mode."""
+        self.selected_package = package
 
-        # Clear current view
-        self.package_table.clear_packages()
-        self.progress_label.setVisible(False)
-
-        # Update status message
-        tab_name = self.get_active_tab_name()
-        self.status_label.setText(f"Viewing: {source_label} packages - {tab_name}")
-
-        # Disable Install/Uninstall buttons when source changes
-        self.selected_package = None
-        self.install_btn.setEnabled(False)
-        self.uninstall_btn.setEnabled(False)
-
-        # Update search placeholder
-        self.search_input.setPlaceholderText(f"Search {source_label.lower()} packages...")
-
-        print(f"[MainWindow] Source changed to: {source_label}")
+        # Enable the appropriate button based on what's in the table
+        if not self.operation_in_progress:
+            if self.table_mode == 'installed':
+                self.uninstall_btn.setEnabled(True)
+                self.install_btn.setEnabled(False)
+            elif self.table_mode == 'available':
+                self.install_btn.setEnabled(True)
+                self.uninstall_btn.setEnabled(False)
 
     def on_tab_changed(self, index: int):
-        """Handle repository tab change."""
+        """Handle repository tab change - clear table."""
         tab_name = self.repo_tabs.tabText(index)
 
+        # Clear table
         self.package_table.clear_packages()
         self.progress_label.setVisible(False)
+        self.table_mode = None
 
-        # Update status with current source
-        source_label = "Installed" if self.current_source == 'installed' else "Available"
-        self.status_label.setText(f"Viewing: {source_label} packages - {tab_name}")
+        # Update status
+        self.status_label.setText(f"Tab changed to: {tab_name}")
 
         # Disable Install/Uninstall buttons when tab changes
         self.selected_package = None
@@ -521,7 +480,7 @@ class WinPacManMainWindow(QMainWindow):
         self.uninstall_btn.setEnabled(False)
 
         # Update search placeholder
-        self.search_input.setPlaceholderText(f"Search packages in {tab_name}...")
+        self.search_input.setPlaceholderText(f"Search available packages in {tab_name}...")
 
     def on_search_text_changed(self, text: str):
         """Handle search text changes - trigger search on Enter or button click only."""
@@ -529,7 +488,7 @@ class WinPacManMainWindow(QMainWindow):
         self.search_btn.setEnabled(len(text.strip()) > 0)
 
     def search_packages(self):
-        """Search packages (installed or available) in the active tab."""
+        """Search available packages and display in the shared table."""
         query = self.search_input.text().strip()
 
         if not query:
@@ -539,16 +498,9 @@ class WinPacManMainWindow(QMainWindow):
         # Get managers from active tab
         managers_filter = self.get_active_managers()
         tab_name = self.get_active_tab_name()
-        source_label = "Installed" if self.current_source == 'installed' else "Available"
 
-        print(f"[MainWindow] Searching for '{query}' in {source_label.lower()} packages ({tab_name})")
+        print(f"[MainWindow] Searching for '{query}' in available packages ({tab_name})")
 
-        # Handle installed packages search
-        if self.current_source == 'installed':
-            self._search_installed_packages(query, managers_filter, tab_name)
-            return
-
-        # Handle available packages search (metadata cache)
         repo_text = tab_name.lower()
 
         try:
@@ -578,14 +530,23 @@ class WinPacManMainWindow(QMainWindow):
                 # Convert to Package objects
                 packages = [metadata.to_package(cache_service=self.metadata_cache) for metadata in results]
 
-                # Display in table
+                # Store and display in shared table
+                self.current_packages = packages
                 self.package_table.set_packages(packages)
+                self.table_mode = 'available'  # Track that table now shows available packages
+
+                # Disable both buttons until a package is selected
+                self.install_btn.setEnabled(False)
+                self.uninstall_btn.setEnabled(False)
+                self.selected_package = None
+
                 self.persistent_status = f"Found {len(packages)} results for '{query}' in {repo_text}"
                 self.status_label.setText(self.persistent_status)
 
                 print(f"[MainWindow] Found {len(packages)} results from {repo_text}")
             else:
                 self.package_table.clear_packages()
+                self.table_mode = None
                 self.persistent_status = f"No results found for '{query}' in {repo_text}"
                 self.status_label.setText(self.persistent_status)
                 QMessageBox.information(
@@ -604,40 +565,6 @@ class WinPacManMainWindow(QMainWindow):
                 f"An error occurred while searching: {str(e)}"
             )
 
-    def _search_installed_packages(self, query: str, managers_filter: Optional[List[str]], tab_name: str):
-        """Search within installed packages (filters locally, doesn't query package manager)."""
-        # If no packages are loaded, inform user to refresh first
-        if not self.current_packages:
-            QMessageBox.information(
-                self,
-                "No Packages Loaded",
-                "Please use the 'Refresh' button to load installed packages first."
-            )
-            return
-
-        # Filter packages by query (case-insensitive search in name, id, description)
-        query_lower = query.lower()
-        filtered = [
-            pkg for pkg in self.current_packages
-            if (query_lower in pkg.name.lower() or
-                query_lower in pkg.id.lower() or
-                (pkg.description and query_lower in pkg.description.lower()))
-        ]
-
-        if filtered:
-            self.package_table.set_packages(filtered)
-            self.persistent_status = f"Found {len(filtered)} installed packages matching '{query}' in {tab_name}"
-            self.status_label.setText(self.persistent_status)
-            print(f"[MainWindow] Found {len(filtered)} installed packages")
-        else:
-            self.package_table.clear_packages()
-            self.persistent_status = f"No installed packages found matching '{query}' in {tab_name}"
-            self.status_label.setText(self.persistent_status)
-            QMessageBox.information(
-                self,
-                "No Results",
-                f"No installed packages found matching '{query}' in {tab_name}."
-            )
 
     def refresh_metadata_cache(self):
         """Refresh the metadata cache from providers."""
@@ -670,15 +597,6 @@ class WinPacManMainWindow(QMainWindow):
                 f"An error occurred while refreshing cache: {str(e)}"
             )
 
-    @pyqtSlot(Package)
-    def on_package_selected(self, package: Package):
-        """Handle package selection change - enable/disable buttons."""
-        self.selected_package = package
-
-        # Enable buttons only if no operation is in progress
-        if not self.operation_in_progress:
-            self.install_btn.setEnabled(True)
-            self.uninstall_btn.setEnabled(True)
 
     def on_verbose_toggled(self, checked: bool):
         """Handle verbose mode menu toggle."""
@@ -785,7 +703,7 @@ class WinPacManMainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "No Package Selected",
-                "Please select a package to uninstall."
+                "Please select an installed package to uninstall."
             )
             return
 
@@ -869,17 +787,10 @@ class WinPacManMainWindow(QMainWindow):
 
     @pyqtSlot(list)
     def on_packages_loaded(self, packages: List[Package]):
-        """Handle loaded packages."""
+        """Handle loaded packages (legacy method - kept for compatibility)."""
         print(f"[MainWindow] on_packages_loaded: Received {len(packages)} packages")
-        self.current_packages = packages
-        self.package_table.set_packages(packages)
-        print(f"[MainWindow] Package table updated with {len(packages)} packages")
-
-        # Show package count in status bar (keep it visible)
-        package_word = "package" if len(packages) == 1 else "packages"
-        source_label = "Installed" if self.current_source == 'installed' else "Available"
-        self.persistent_status = f"{len(packages)} {source_label.lower()} {package_word} loaded - Ready"
-        self.status_label.setText(self.persistent_status)
+        # This method is kept for compatibility but is no longer used in the new UI
+        # Packages are now loaded directly via list_installed_packages() and search_packages()
 
     @pyqtSlot(object)
     def on_install_complete(self, result):
@@ -898,7 +809,7 @@ class WinPacManMainWindow(QMainWindow):
                 result.message
             )
             # Auto-refresh to show newly installed package
-            self.refresh_packages()
+            self.list_installed_packages()
         else:
             QMessageBox.critical(
                 self,
@@ -923,7 +834,7 @@ class WinPacManMainWindow(QMainWindow):
                 result.message
             )
             # Auto-refresh to remove uninstalled package
-            self.refresh_packages()
+            self.list_installed_packages()
         else:
             QMessageBox.critical(
                 self,
@@ -1538,28 +1449,26 @@ class WinPacManMainWindow(QMainWindow):
 
     def disable_controls(self):
         """Disable controls during operation."""
-        self.installed_radio.setEnabled(False)
-        self.available_radio.setEnabled(False)
         self.repo_tabs.setEnabled(False)
-        self.refresh_btn.setEnabled(False)
+        self.list_installed_btn.setEnabled(False)
         self.search_btn.setEnabled(False)
         self.install_btn.setEnabled(False)
         self.uninstall_btn.setEnabled(False)
 
     def enable_controls(self):
         """Enable controls after operation."""
-        self.installed_radio.setEnabled(True)
-        self.available_radio.setEnabled(True)
         self.repo_tabs.setEnabled(True)
-        self.refresh_btn.setEnabled(True)
+        self.list_installed_btn.setEnabled(True)
 
         # Only enable search if there's text in the search box
         self.search_btn.setEnabled(len(self.search_input.text().strip()) > 0)
 
-        # Only enable Install/Uninstall if package is selected
+        # Only enable Install/Uninstall if package is selected based on table mode
         if self.selected_package:
-            self.install_btn.setEnabled(True)
-            self.uninstall_btn.setEnabled(True)
+            if self.table_mode == 'installed':
+                self.uninstall_btn.setEnabled(True)
+            elif self.table_mode == 'available':
+                self.install_btn.setEnabled(True)
 
     def show_user_guide(self):
         """Show user guide dialog with rendered markdown."""
