@@ -10,6 +10,7 @@ class PackageManager(Enum):
     CHOCOLATEY = "chocolatey"
     PIP = "pip"
     NPM = "npm"
+    CARGO = "cargo"
     SCOOP = "scoop"
     MSSTORE = "msstore"
     UNKNOWN = "unknown"  # For manually installed packages with unknown source
