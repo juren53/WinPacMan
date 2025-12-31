@@ -36,6 +36,7 @@ class PackageTableWidget(QTableWidget):
         PackageManager.CHOCOLATEY: QColor("#FFF4E6"),  # Light orange
         PackageManager.PIP: QColor("#E6F3FF"),         # Light blue
         PackageManager.NPM: QColor("#FCE6F3"),         # Light pink
+        PackageManager.CARGO: QColor("#FFE6E6"),       # Light red/coral
         PackageManager.SCOOP: QColor("#F0E6FF"),       # Light purple
         PackageManager.MSSTORE: QColor("#E6FFFA"),     # Light cyan
         PackageManager.UNKNOWN: QColor("#F5F5F5")      # Light gray
@@ -118,11 +119,8 @@ class PackageTableWidget(QTableWidget):
             version_item = QTableWidgetItem(package.version)
             self.setItem(row, 1, version_item)
 
-            # Manager - show "Installed" for installed packages, manager name for available
-            if package.status == PackageStatus.INSTALLED:
-                manager_display = "Installed"
-            else:
-                manager_display = self._format_manager_name(package.manager.value)
+            # Manager - show the actual package manager name
+            manager_display = self._format_manager_name(package.manager.value)
             manager_item = QTableWidgetItem(manager_display)
             self.setItem(row, 2, manager_item)
 
@@ -155,6 +153,7 @@ class PackageTableWidget(QTableWidget):
             'chocolatey': 'Chocolatey',
             'pip': 'Pip',
             'npm': 'NPM',
+            'cargo': 'Cargo',
             'scoop': 'Scoop',
             'msstore': 'MS Store',
             'unknown': 'Unknown'
