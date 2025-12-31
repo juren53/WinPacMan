@@ -99,7 +99,9 @@ class WinPacManMainWindow(QMainWindow):
     def init_window(self):
         """Initialize window properties."""
         self.setWindowTitle("WinPacMan - Windows Package Manager")
-        self.resize(1000, 700)
+
+        # Restore saved window geometry or use defaults
+        self.restore_window_geometry()
 
     def init_ui(self):
         """Setup user interface."""
@@ -2034,6 +2036,69 @@ QPushButton:disabled {
                     color: #666666;
                 }
             """)
+
+    def restore_window_geometry(self):
+        """Restore window size and position from saved settings."""
+        try:
+            # Get saved window state
+            window_state = self.settings_service.get_window_state()
+
+            if window_state:
+                # Restore size
+                width = window_state.get('width', 1000)
+                height = window_state.get('height', 700)
+                self.resize(width, height)
+
+                # Restore position
+                x = window_state.get('x')
+                y = window_state.get('y')
+                if x is not None and y is not None:
+                    self.move(x, y)
+
+                # Restore maximized state
+                if window_state.get('maximized', False):
+                    self.showMaximized()
+
+                print(f"[MainWindow] Restored window geometry: {width}x{height} at ({x}, {y})")
+            else:
+                # Use default size if no saved state
+                self.resize(1000, 700)
+                print("[MainWindow] Using default window geometry: 1000x700")
+
+        except Exception as e:
+            print(f"[MainWindow] Error restoring window geometry: {e}")
+            # Fall back to default size
+            self.resize(1000, 700)
+
+    def save_window_geometry(self):
+        """Save current window size and position to settings."""
+        try:
+            # Get current geometry
+            geometry = self.geometry()
+            is_maximized = self.isMaximized()
+
+            # Save window state
+            window_state = {
+                'width': geometry.width(),
+                'height': geometry.height(),
+                'x': geometry.x(),
+                'y': geometry.y(),
+                'maximized': is_maximized
+            }
+
+            self.settings_service.set_window_state(window_state)
+            print(f"[MainWindow] Saved window geometry: {window_state}")
+
+        except Exception as e:
+            print(f"[MainWindow] Error saving window geometry: {e}")
+
+    def closeEvent(self, event):
+        """Handle window close event - save geometry before closing."""
+        # Save window geometry
+        self.save_window_geometry()
+
+        # Accept the close event
+        event.accept()
 
     # Markdown Help System Methods
     def get_dialog_theme_colors(self) -> dict:
