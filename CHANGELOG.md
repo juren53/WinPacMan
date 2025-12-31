@@ -2,6 +2,50 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.4] - 2025-12-31
+
+### Added
+- **Issue Tracker Link in Help Menu**:
+  - Added "Issue Tracker" menu item in Help menu (Help → Issue Tracker).
+  - Opens GitHub Issues page (`https://github.com/juren53/WinPacMan/issues`) in default browser.
+  - Allows users to easily report bugs and request features.
+  - Fallback error dialog if browser fails to open, displaying URL for manual access.
+  - Keyboard shortcut: `Alt+H` → `I`.
+
+- **Right-Click Context Menu for Installed Packages**:
+  - Added context menu to installed packages table (right-click on package name).
+  - Shows "Search '<package>' in Available Packages" menu item.
+  - Automatically searches for the package in available packages metadata cache.
+  - Helpful for researching packages with "Unknown" provider.
+  - Quick workflow: right-click → search → identify original repository/manager.
+  - No need to manually type package names in search box.
+
+- **Cached Installed Packages with Separate Refresh**:
+  - Split installed packages into two operations:
+    - "List Installed Packages" button: Loads from cache (instant, like available packages).
+    - "Refresh Installed" button: Scans Windows Registry and updates cache (1-2 seconds).
+  - Installed packages now load instantly from cache (consistent with available packages behavior).
+  - First-time use prompts user to refresh if cache is empty.
+  - Status messages differentiate between cache load and registry refresh.
+  - User controls when to scan registry for updates.
+  - Both buttons properly disabled during operations.
+
+### Fixed
+- **Manager Column Display**:
+  - Fixed Manager column in installed packages list to show actual package manager name.
+  - Before: Showed "Installed" for all installed packages.
+  - After: Shows WinGet, Chocolatey, Scoop, NPM, Cargo, etc.
+  - Users can now identify which manager installed each package.
+  - Added Cargo to manager name formatting map.
+  - Added Cargo color to MANAGER_COLORS (light red/coral).
+
+### Changed
+- **About Dialog Updated**:
+  - Updated supported package managers list to include all 5 providers:
+    - WinGet, Chocolatey, Scoop, NPM, Cargo.
+
+---
+
 ## [0.5.3d] - 2025-12-31
 
 ### Added
