@@ -312,7 +312,20 @@ class WinPacManMainWindow(QMainWindow):
         user_guide_action = QAction("&User Guide", self)
         user_guide_action.triggered.connect(self.show_user_guide)
         help_menu.addAction(user_guide_action)
-        
+
+        changelog_action = QAction("&Change Log", self)
+        changelog_action.triggered.connect(self.show_changelog)
+        help_menu.addAction(changelog_action)
+
+        shortcuts_action = QAction("&Keyboard Shortcuts", self)
+        shortcuts_action.triggered.connect(self.show_keyboard_shortcuts)
+        help_menu.addAction(shortcuts_action)
+
+        help_menu.addSeparator()
+
+        about_action = QAction("&About", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
 
     def show_cache_summary(self):
         """Show a dialog with a summary of the package cache."""
@@ -338,20 +351,6 @@ class WinPacManMainWindow(QMainWindow):
             "Cache Summary",
             summary_text
         )
-
-        changelog_action = QAction("&Change Log", self)
-        changelog_action.triggered.connect(self.show_changelog)
-        help_menu.addAction(changelog_action)
-
-        shortcuts_action = QAction("&Keyboard Shortcuts", self)
-        shortcuts_action.triggered.connect(self.show_keyboard_shortcuts)
-        help_menu.addAction(shortcuts_action)
-
-        help_menu.addSeparator()
-
-        about_action = QAction("&About", self)
-        about_action.triggered.connect(self.show_about)
-        help_menu.addAction(about_action)
 
     def get_active_tab_name(self) -> str:
         """Get the name of the currently active tab (without count)."""

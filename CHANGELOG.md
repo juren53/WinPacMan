@@ -2,6 +2,13 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.2a] - 2025-12-30
+
+### Fixed
+- **Help Menu**: Restored missing menu items (Change Log, Keyboard Shortcuts, About) that were accidentally removed during UI redesign. These items were mistakenly placed inside the `show_cache_summary()` function instead of the `create_menu_bar()` method.
+
+---
+
 ## [0.5.2] - 2025-12-30
 
 ### Changed
