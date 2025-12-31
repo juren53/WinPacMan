@@ -2,6 +2,21 @@
 
 All notable changes to WinPacMan are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.3c] - 2025-12-30
+
+### Fixed
+- **Chocolatey Complete Package Coverage**:
+  - Removed artificial 10,000 package limit in Chocolatey metadata fetcher.
+  - Implemented skiptoken-based pagination to fetch ALL packages from Chocolatey Community Repository.
+  - Changed from manual `$skip` pagination (limited to 10,000) to following "next" links in Atom XML responses.
+  - Added `_extract_next_link()` method to parse `<link rel="next">` elements from API responses.
+  - API automatically transitions from offset-based pagination (`$skip` parameter) to cursor-based pagination (`$skiptoken` parameter) after 10,000 packages.
+  - **Result**: Increased Chocolatey package coverage from 10,000 to 10,676 packages (+676 packages, eliminating the 6.3% gap).
+  - Uses official NuGet v2 OData API pagination mechanism for reliable, unlimited package fetching.
+  - Investigation and solution documented in `notes/INFO_Chocolatey_API_limit.md`.
+
+---
+
 ## [0.5.3] - 2025-12-30
 
 ### Added
