@@ -176,21 +176,27 @@ class WinPacManMainWindow(QMainWindow):
         header.setStyleSheet("font-weight: bold; font-size: 11pt;")
         layout.addWidget(header)
 
+        # Buttons in horizontal layout
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(5)
+
         # List Installed Packages button
-        self.list_installed_btn = QPushButton("List Installed Packages")
+        self.list_installed_btn = QPushButton("List Installed")
         self.list_installed_btn.clicked.connect(self.list_installed_packages)
-        layout.addWidget(self.list_installed_btn)
+        button_layout.addWidget(self.list_installed_btn)
 
         # Refresh Installed button
-        self.refresh_installed_btn = QPushButton("Refresh Installed")
+        self.refresh_installed_btn = QPushButton("Refresh")
         self.refresh_installed_btn.clicked.connect(self.refresh_installed_packages)
-        layout.addWidget(self.refresh_installed_btn)
+        button_layout.addWidget(self.refresh_installed_btn)
 
         # Uninstall button
         self.uninstall_btn = QPushButton("Uninstall")
         self.uninstall_btn.clicked.connect(self.uninstall_package)
         self.uninstall_btn.setEnabled(False)  # Disabled until data appears
-        layout.addWidget(self.uninstall_btn)
+        button_layout.addWidget(self.uninstall_btn)
+
+        layout.addLayout(button_layout)
 
         return layout
 
