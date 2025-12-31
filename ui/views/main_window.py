@@ -116,6 +116,18 @@ class WinPacManMainWindow(QMainWindow):
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(10)
 
+        # Header with version info in upper right
+        header_layout = QHBoxLayout()
+        header_layout.addStretch()  # Push version label to the right
+
+        # Version label
+        version_info = self._get_version_info()
+        self.version_label = QLabel(version_info)
+        self.version_label.setStyleSheet("color: #666666; font-size: 9pt; padding-bottom: 5px;")
+        header_layout.addWidget(self.version_label)
+
+        main_layout.addLayout(header_layout)
+
         # Repository tabs at the top
         self.create_repository_tabs()
         main_layout.addWidget(self.repo_tabs)
