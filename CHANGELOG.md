@@ -17,6 +17,21 @@ All notable changes to WinPacMan are documented here. This project follows [Sema
   - **Installed Packages Row**: Shows live registry-scanned package count with "Live" status indicator.
   - **Professional Table Layout**: Proper column sizing, centered alignment for numbers, bold text for summary rows, and visual separators.
 
+- **Windows Power Management - Prevent Sleep During Cache Refresh**:
+  - Added `WindowsPowerManager` class with `prevent_sleep()` context manager to prevent Windows from sleeping during long-running operations.
+  - Uses Windows `SetThreadExecutionState` API with `ES_CONTINUOUS | ES_SYSTEM_REQUIRED` flags to temporarily disable system sleep.
+  - Automatically restores previous power state when operation completes or fails.
+  - Applied to all cache refresh operations:
+    - Cache Summary dialog: Individual provider refresh
+    - Cache Summary dialog: Refresh All providers
+    - Config menu: Refresh Metadata Cache
+  - Prevents interrupted downloads when system goes to sleep (especially important for Chocolatey which can take 10-15 minutes to fetch 2500+ packages).
+  - Cross-platform safe: No-op on non-Windows systems.
+  - Console logging shows power state changes: `[PowerManager] System sleep prevention enabled/disabled`.
+
+### Fixed
+- **Chocolatey Provider Registration**: Fixed Chocolatey refresh button not working in Cache Summary dialog. The `ChocolateyProvider` was not being registered in the main window initialization, preventing cache refresh operations. Added provider registration and export from metadata module.
+
 ---
 
 ## [0.5.2a] - 2025-12-30
