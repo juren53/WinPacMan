@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
     QMenuBar, QMenu, QLineEdit, QTabWidget, QRadioButton, QButtonGroup,
     QTextBrowser, QTableWidget, QTableWidgetItem, QHeaderView
 )
-from PyQt6.QtCore import Qt, pyqtSlot, QTimer
-from PyQt6.QtGui import QFont, QAction
+from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QUrl
+from PyQt6.QtGui import QFont, QAction, QDesktopServices
 from typing import List, Optional
 
 from core.models import PackageManager, Package, PackageStatus
@@ -347,6 +347,10 @@ class WinPacManMainWindow(QMainWindow):
         shortcuts_action = QAction("&Keyboard Shortcuts", self)
         shortcuts_action.triggered.connect(self.show_keyboard_shortcuts)
         help_menu.addAction(shortcuts_action)
+
+        issue_tracker_action = QAction("&Issue Tracker", self)
+        issue_tracker_action.triggered.connect(self.open_issue_tracker)
+        help_menu.addAction(issue_tracker_action)
 
         help_menu.addSeparator()
 
@@ -1875,8 +1879,9 @@ Error: {str(e)}"""
 <ul>
 <li>WinGet - Windows Package Manager</li>
 <li>Chocolatey - The Package Manager for Windows</li>
-<li>Pip - Python Package Installer</li>
+<li>Scoop - A command-line installer for Windows</li>
 <li>NPM - Node Package Manager</li>
+<li>Cargo - Rust Package Manager</li>
 </ul>
 <br>
 <p>🤖 Built with <a href="https://claude.com/claude-code">Claude Code</a></p>
@@ -1945,6 +1950,16 @@ Error: {str(e)}
         layout.addLayout(button_layout)
         
         dialog.exec()
+
+    def open_issue_tracker(self):
+        """Open the WinPacMan Issue Tracker in the default browser."""
+        url = QUrl("https://github.com/juren53/WinPacMan/issues")
+        if not QDesktopServices.openUrl(url):
+            QMessageBox.warning(
+                self,
+                "Issue Tracker",
+                "Unable to open the issue tracker.\n\nPlease visit:\nhttps://github.com/juren53/WinPacMan/issues"
+            )
 
     def show_configuration(self):
         """Show configuration file in read-only dialog."""
